@@ -10,7 +10,7 @@ import { useFinance, useIsAdmin, useTodayQueue, useUpcomingAppointments } from '
 import { dayKey, formatArabicWeekday, money, startOfDay } from '@/lib/format'
 import { AppointmentForm, AppointmentRow, formatAppointmentDay } from '@/components/clinic/appointments'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { firebaseErrorMessage } from '@/lib/firebase-errors'
+import { apiErrorMessage } from '@/lib/api-errors'
 import type { QueueEntry } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -290,10 +290,10 @@ function ReceptionHome() {
           <LoadingSkeleton rows={4} />
         ) : isError ? (
           <EmptyState
-            title="تعذر تحميل زيارات النهاردة من Firebase"
+            title="تعذر تحميل زيارات النهاردة"
             action={
               <div className="grid justify-items-center gap-3">
-                <p className="max-w-md text-sm text-muted-foreground">{firebaseErrorMessage(error)}</p>
+                <p className="max-w-md text-sm text-muted-foreground">{apiErrorMessage(error)}</p>
                 <Button onClick={() => void refetch()}>إعادة المحاولة</Button>
               </div>
             }

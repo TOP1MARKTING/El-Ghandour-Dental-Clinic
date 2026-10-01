@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useState } from 'react'
 import { Check, ClipboardPlus } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
@@ -67,7 +68,7 @@ function CheckInNew() {
       )
       void nav({ to: '/', replace: true })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحجز')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحجز'))
     } finally {
       setSaving(false)
     }

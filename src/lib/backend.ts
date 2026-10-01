@@ -2,45 +2,37 @@ import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
-const firebaseConfig = {
+const config = {
   apiKey: 'AIzaSyAlXwZ30nvXiL0k6gTc-dH-PgvdCnf1tyU',
   authDomain: 'dentalclinic-53349.firebaseapp.com',
   projectId: 'dentalclinic-53349',
   storageBucket: 'dentalclinic-53349.firebasestorage.app',
   messagingSenderId: '657607084167',
   appId: '1:657607084167:web:2191429cda9a2dbfc19022',
-  measurementId: 'G-YMYLEGSK4H',
 }
 
 let app: FirebaseApp | undefined
 let auth: Auth | undefined
 let db: Firestore | undefined
 
-export function getFirebaseApp() {
+export const CLIENT_ONLY_ERROR = 'Backend is client-only'
+
+function getClientApp() {
   if (typeof window === 'undefined') {
-    throw new Error('Firebase is client-only')
+    throw new Error(CLIENT_ONLY_ERROR)
   }
   if (!app) {
-    app = getApps().length ? getApps()[0]! : initializeApp(firebaseConfig)
+    app = getApps().length ? getApps()[0]! : initializeApp(config)
   }
   return app
 }
 
-export function getFirebaseAuth() {
-  if (!auth) auth = getAuth(getFirebaseApp())
+export function getAuthClient() {
+  if (!auth) auth = getAuth(getClientApp())
   return auth
 }
 
 export function getDb() {
-  if (!db) db = getFirestore(getFirebaseApp())
+  if (!db) db = getFirestore(getClientApp())
   return db
-}
-export async function initAnalytics() {
-  if (typeof window === 'undefined') return
-  try {
-    const { getAnalytics, isSupported } = await import('firebase/analytics')
-    if (await isSupported()) getAnalytics(getFirebaseApp())
-  } catch {
-    // analytics optional
-  }
 }

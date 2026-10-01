@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useEffect, useState } from 'react'
 import { CalendarDays, WalletCards } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { Field, EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
@@ -128,7 +129,7 @@ function QueueBill() {
           })
           followMsg = ` · الموعد الجاي ${formatAppointmentDay(followDate)}`
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : 'الحساب اتسجل بس الموعد ما اتحجزش')
+          toast.error(errorText(err, 'الحساب اتسجل بس الموعد ما اتحجزش'))
         }
       }
       toast.success(
@@ -136,7 +137,7 @@ function QueueBill() {
       )
       void nav({ to: '/', replace: true })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء التسجيل')
+      toast.error(errorText(err, 'حصل خطأ أثناء التسجيل'))
     } finally {
       setSaving(false)
     }

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ar } from 'date-fns/locale'
 import { CalendarCheck, CalendarDays, Clock, FileText, Phone, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Field } from '@/components/clinic/ui'
@@ -199,7 +200,7 @@ export function AppointmentForm({
       if (!fixedPatientId) setPatientId('')
       onDone?.()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء حجز الموعد')
+      toast.error(errorText(err, 'حصل خطأ أثناء حجز الموعد'))
     }
   }
 
@@ -287,7 +288,7 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
       toast.success(`${a.patientName} اتسجل إنه جه ✅`)
       void nav({ to: '/' })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ')
+      toast.error(errorText(err, 'حصل خطأ'))
     }
   }
 

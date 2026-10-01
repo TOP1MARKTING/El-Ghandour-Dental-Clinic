@@ -3,7 +3,7 @@ import type { ClinicSettings } from '@/types'
 /** اسم بند الكشف ثابت عشان الخزنة تفرّق دخل الكشف عن العلاج — السعر نفسه من الإعدادات */
 export const NEW_PATIENT_FEE_NAME = 'كشف'
 
-/** لحد ما مستند الإعدادات يتحمّل أو لو لسه ما اتعملش على Firebase */
+/** لحد ما الإعدادات تتحمّل أو لو لسه ما اتعملتش */
 export const DEFAULT_SETTINGS: ClinicSettings = {
   newPatientFee: 150,
   discountPresets: [0, 10, 20],

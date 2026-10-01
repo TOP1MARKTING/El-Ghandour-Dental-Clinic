@@ -1,4 +1,4 @@
-﻿import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useState, type ReactNode } from 'react'
 import {
   ArrowRight,
@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { dayKey, money, withWeekday } from '@/lib/format'
 import {
   useCreatePayment,
@@ -365,7 +366,7 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
       toast.success('تم تسجيل العلاج والدفعة ✅')
       onSaved()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحفظ')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     }
   }
 

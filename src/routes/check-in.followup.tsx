@@ -1,7 +1,8 @@
-﻿import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { CalendarClock, CheckCircle2, ExternalLink, Plus, UserRoundSearch, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
@@ -97,7 +98,7 @@ function CheckInFollowup() {
       toast.success('اتسجل إنه جه النهاردة ✅')
       void nav({ to: '/', replace: true })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء التسجيل')
+      toast.error(errorText(err, 'حصل خطأ أثناء التسجيل'))
     } finally {
       setSaving(false)
     }
@@ -229,7 +230,7 @@ function OldBalance({
       )
       setOldPaid('')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الدفع')
+      toast.error(errorText(err, 'حصل خطأ أثناء الدفع'))
     }
   }
 

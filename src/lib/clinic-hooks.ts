@@ -193,7 +193,7 @@ function refreshClinicData(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: ['visits'] })
   void qc.invalidateQueries({ queryKey: ['payments'] })
   void qc.invalidateQueries({ queryKey: ['finance'] })
-  // زيارات النهاردة متوصلة لايف من Firestore
+  // زيارات النهاردة متوصلة لايف
   void qc.invalidateQueries({ queryKey: ['queue'], predicate: (q) => q.queryKey[1] !== 'today' })
 }
 
@@ -342,7 +342,7 @@ export function useUpdateAppointmentStatus() {
   })
 }
 
-/** إعدادات العيادة من Firebase — لحد ما تتحمّل بترجع القيم الافتراضية */
+/** إعدادات العيادة — لحد ما تتحمّل بترجع القيم الافتراضية */
 export function useClinicSettings() {
   const ready = useClinicReady()
   const query = useQuery({

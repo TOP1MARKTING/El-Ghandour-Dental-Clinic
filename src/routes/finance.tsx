@@ -6,6 +6,7 @@ import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { Clock3, PiggyBank, Plus, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { dayTitle, KindFilterTabs, PaymentList, timeLabel, type KindFilter } from '@/components/clinic/payment-list'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { PageSurface } from '@/components/clinic/app-shell'
 import { AdminOnly } from '@/components/clinic/admin-only'
 import { inputClass } from '@/components/clinic/form-layout'
@@ -171,7 +172,7 @@ function Finance() {
         <LoadingSkeleton rows={4} />
       ) : isError ? (
         <EmptyState
-          title="تعذر تحميل الخزنة — اتأكد إن قواعد Firestore اتنشرت"
+          title="تعذر تحميل الخزنة"
           action={<Button onClick={() => void refetch()}>إعادة المحاولة</Button>}
         />
       ) : (
@@ -296,7 +297,7 @@ function AddExpense() {
       setDate(today)
       setOpen(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحفظ')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     }
   }
 
@@ -375,7 +376,7 @@ function ExpenseRow({
       await remove.mutateAsync(id)
       toast.success('اتحذف المصروف')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحذف')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحذف'))
     }
   }
 

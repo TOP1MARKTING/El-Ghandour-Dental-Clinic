@@ -15,7 +15,7 @@ import {
   useServices,
   useUpdateServicePrice,
 } from '@/lib/clinic-hooks'
-import { firebaseErrorMessage } from '@/lib/firebase-errors'
+import { errorText } from '@/lib/api-errors'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { DEFAULT_SERVICES, groupByFirstWord, subServiceName } from '@/lib/visit-reasons'
@@ -52,7 +52,7 @@ function Services() {
       toast.success('تمت إضافة الخدمة ✅')
       formEl.reset()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الإضافة')
+      toast.error(errorText(err, 'حصل خطأ أثناء الإضافة'))
     }
   }
 
@@ -66,7 +66,7 @@ function Services() {
       }
       toast.success('اتضافت خدمات العيادة — كمّل الأسعار الفاضية')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الإضافة')
+      toast.error(errorText(err, 'حصل خطأ أثناء الإضافة'))
     } finally {
       setImporting(false)
     }
@@ -101,7 +101,7 @@ function Services() {
         <LoadingSkeleton rows={4} />
       ) : isError ? (
         <EmptyState
-          title="تعذر تحميل الخدمات — اتأكد إن قواعد Firestore اتنشرت"
+          title="تعذر تحميل الخدمات"
           action={<Button onClick={() => void refetch()}>إعادة المحاولة</Button>}
         />
       ) : services.length === 0 ? (
@@ -226,7 +226,7 @@ function NewPatientFeeForm({ current, loading }: { current: number; loading: boo
       await save.mutateAsync({ ...settings, newPatientFee: Number(fee) })
       toast.success(`سعر الكشف بقى ${money(Number(fee))}`)
     } catch (err) {
-      toast.error(err && typeof err === 'object' && 'code' in err ? firebaseErrorMessage(err) : 'حصل خطأ أثناء الحفظ')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     }
   }
 
@@ -279,7 +279,7 @@ function ServiceRow({ service, label }: { service: Service; label?: string }) {
       await update.mutateAsync({ id: service.id, price: Number(price || 0) })
       toast.success(`سعر ${service.name} بقى ${money(Number(price || 0))}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحفظ')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     }
   }
 
@@ -289,7 +289,7 @@ function ServiceRow({ service, label }: { service: Service; label?: string }) {
       await remove.mutateAsync(service.id)
       toast.success('اتحذفت الخدمة')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحذف')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحذف'))
     }
   }
 

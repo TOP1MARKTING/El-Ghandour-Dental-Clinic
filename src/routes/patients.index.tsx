@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { money } from '@/lib/format'
 import { usePatients } from '@/lib/clinic-hooks'
+import { CLIENT_ONLY_ERROR } from '@/lib/backend'
 import { PageSurface } from '@/components/clinic/app-shell'
 import { EmptyState, LoadingSkeleton, PageHeader, SearchBar } from '@/components/clinic/ui'
 import { PatientCard } from '@/components/clinic/cards'
@@ -34,15 +35,15 @@ function Patients() {
     const code = (error as { code?: string } | null)?.code ?? ''
     const msg = error instanceof Error ? error.message : ''
     if (code === 'permission-denied' || /permission/i.test(msg)) {
-      return 'صلاحيات Firestore مغلقة — انشر القواعد من تبويب Rules في Firebase'
+      return 'مفيش صلاحية لعرض المرضى'
     }
     if (/not.?found|does not exist|404/i.test(msg)) {
-      return 'قاعدة Firestore لسه متعملتش — أنشئها من كونسول Firebase'
+      return 'قاعدة البيانات مش متاحة دلوقتي'
     }
-    if (/Firebase is client-only/i.test(msg)) {
+    if (msg === CLIENT_ONLY_ERROR) {
       return 'جاري التحميل على المتصفح...'
     }
-    return msg || 'تعذر تحميل المرضى من Firebase'
+    return 'تعذر تحميل المرضى'
   })()
 
   return (

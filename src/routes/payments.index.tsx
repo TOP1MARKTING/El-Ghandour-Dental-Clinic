@@ -117,7 +117,7 @@ function Payments() {
       ) : isError ? (
         <div className="mt-3">
           <EmptyState
-            title="تعذر تحميل الدفعات من Firebase"
+            title="تعذر تحميل الدفعات"
             action={<Button onClick={() => void refetch()}>إعادة المحاولة</Button>}
           />
         </div>

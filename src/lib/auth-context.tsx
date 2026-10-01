@@ -12,7 +12,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { getFirebaseAuth, initAnalytics } from '@/lib/firebase'
+import { getAuthClient } from '@/lib/backend'
 import { setActorName } from '@/lib/clinic-api'
 import type { StaffRole } from '@/types'
 
@@ -32,7 +32,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** حساب الدكتور — أي حساب تاني في Firebase Authentication بيبقى استقبال */
+/** حساب الدكتور — أي حساب تاني بيبقى استقبال */
 const ADMIN_EMAIL = 'admin@elghandour.com'
 const HELPER_EMAIL = 'helper@elghandour.com'
 
@@ -53,9 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    void initAnalytics()
-    const unsub = onAuthStateChanged(getFirebaseAuth(), (firebaseUser) => {
-      const clinicUser = firebaseUser ? toClinicUser(firebaseUser) : null
+    const unsub = onAuthStateChanged(getAuthClient(), (authUser) => {
+      const clinicUser = authUser ? toClinicUser(authUser) : null
       setActorName(clinicUser?.name ?? '')
       setUser(clinicUser)
       setLoading(false)
@@ -68,10 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       login: async (email, password) => {
-        await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
+        await signInWithEmailAndPassword(getAuthClient(), email.trim(), password)
       },
       logout: async () => {
-        await signOut(getFirebaseAuth())
+        await signOut(getAuthClient())
       },
     }),
     [user, loading],

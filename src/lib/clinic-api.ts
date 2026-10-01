@@ -18,7 +18,7 @@ import {
   type DocumentReference,
   type Firestore,
 } from 'firebase/firestore'
-import { getDb, getFirebaseAuth } from '@/lib/firebase'
+import { getAuthClient, getDb } from '@/lib/backend'
 import { dayKey, formatArabicDate, formatArabicDateTime, formatClock } from '@/lib/format'
 import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
 import type {
@@ -43,7 +43,7 @@ export function setActorName(name: string) {
 }
 
 function actor() {
-  const email = getFirebaseAuth().currentUser?.email ?? ''
+  const email = getAuthClient().currentUser?.email ?? ''
   return { email, name: actorName || email }
 }
 

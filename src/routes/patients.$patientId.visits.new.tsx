@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useState } from 'react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { FormPage } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { useCreateVisit } from '@/lib/clinic-hooks'
@@ -54,7 +55,7 @@ function AddVisit() {
       toast.success('تم تسجيل العلاج والدفعة ✅')
       void nav({ to: '/patients/$patientId', params: { patientId } })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'حصل خطأ أثناء الحفظ')
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     } finally {
       setSaving(false)
     }
