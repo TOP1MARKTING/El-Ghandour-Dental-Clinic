@@ -9,12 +9,12 @@ import {
   daysFromToday,
   daysUntilLabel,
   formatAppointmentDay,
-  parseDayKey,
 } from '@/components/clinic/appointments'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { apiErrorMessage } from '@/lib/api-errors'
 import { useUpcomingAppointments } from '@/lib/clinic-hooks'
-import { dayKey } from '@/lib/format'
+import { dayKey, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ClinicAppointment } from '@/types'
 
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/appointments')({
 })
 
 function Appointments() {
-  const { data: appointments = [], isLoading } = useUpcomingAppointments()
+  const { data: appointments = [], isLoading, isError, error, refetch } = useUpcomingAppointments()
   const [adding, setAdding] = useState(false)
 
   const groups = useMemo(() => {
@@ -81,6 +81,12 @@ function Appointments() {
       <div className="min-h-0 flex-1 overflow-auto pe-1">
         {isLoading ? (
           <LoadingSkeleton rows={4} />
+        ) : isError ? (
+          <EmptyState
+            title="تعذر تحميل المواعيد"
+            description={apiErrorMessage(error)}
+            action={<Button onClick={() => void refetch()}>إعادة المحاولة</Button>}
+          />
         ) : groups.length === 0 ? (
           <EmptyState
             icon={<CalendarDays />}

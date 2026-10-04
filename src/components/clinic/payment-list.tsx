@@ -2,8 +2,8 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { Stethoscope, Wallet } from 'lucide-react'
 import { ToothIcon } from '@/components/clinic/dental-icons'
-import { actorLabel } from '@/components/clinic/patient-timeline'
-import { dayKey, formatArabicWeekday, money, withWeekday } from '@/lib/format'
+import { actorLabel } from '@/lib/auth-context'
+import { groupByDay, money, timeLabel, withWeekday } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Payment, PaymentKind } from '@/types'
 
@@ -27,39 +27,6 @@ export const KIND_FILTERS: { id: KindFilter; label: string }[] = [
   { id: 'علاج', label: 'علاج' },
   { id: 'دفعة', label: 'من الباقي' },
 ]
-
-/** النهاردة / امبارح / الخميس، 1 أكتوبر */
-export function dayTitle(ms: number) {
-  const key = dayKey(new Date(ms))
-  if (key === dayKey()) return 'النهاردة'
-  if (key === dayKey(new Date(Date.now() - 864e5))) return 'امبارح'
-  return formatArabicWeekday(new Date(ms))
-}
-
-/** 5:31 م */
-export function timeLabel(ms: number) {
-  return new Date(ms).toLocaleTimeString('ar-EG', {
-    numberingSystem: 'latn',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
-
-export function groupByDay<T>(items: T[], at: (item: T) => number) {
-  const groups: { key: string; label: string; items: T[] }[] = []
-  for (const item of items) {
-    const ms = at(item)
-    const key = ms ? dayKey(new Date(ms)) : '—'
-    let group = groups.find((g) => g.key === key)
-    if (!group) {
-      group = { key, label: ms ? dayTitle(ms) : 'من غير تاريخ', items: [] }
-      groups.push(group)
-    }
-    group.items.push(item)
-  }
-  return groups
-}
 
 export function KindFilterTabs({
   value,

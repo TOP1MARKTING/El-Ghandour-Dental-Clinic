@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getAggregateFromServer,
   getDoc,
   getDocs,
   increment,
@@ -11,6 +12,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  sum,
   updateDoc,
   where,
   writeBatch,
@@ -19,7 +21,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { getAuthClient, getDb } from '@/lib/backend'
-import { dayKey, formatArabicDate, formatArabicDateTime, formatClock } from '@/lib/format'
+import { dayKey, formatArabicDate, formatArabicDateTime, formatClock, relativeDayLabel } from '@/lib/format'
 import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
 import type {
   AppointmentStatus,
@@ -57,6 +59,18 @@ function touch() {
   return { updatedBy: a.email, updatedByName: a.name, updatedAtMs: Date.now() }
 }
 
+/** المرضى القدام متخزن عندهم «اليوم» كنص — أقرب تاريخ ليه هو آخر تعديل على الملف */
+function lastVisitLabel(data: DocumentData) {
+  const text = String(data['lastVisit'] ?? '')
+  const ms = Number(data['lastVisitMs'] ?? 0) || (text === 'اليوم' ? Number(data['updatedAtMs'] ?? 0) : 0)
+  if (ms) return relativeDayLabel(ms)
+  return text && text !== '—' && text !== 'اليوم' ? text : ''
+}
+
+function visitedNow(now = Date.now()) {
+  return { lastVisit: formatArabicDate(new Date(now)), lastVisitMs: now }
+}
+
 function mapPatient(id: string, data: DocumentData): Patient {
   return {
     id,
@@ -67,7 +81,7 @@ function mapPatient(id: string, data: DocumentData): Patient {
     problem: String(data['problem'] ?? ''),
     notes: String(data['notes'] ?? ''),
     registeredAt: String(data['registeredAt'] ?? ''),
-    lastVisit: String(data['lastVisit'] ?? '—'),
+    lastVisit: lastVisitLabel(data),
     total: Number(data['total'] ?? 0),
     paid: Number(data['paid'] ?? 0),
     createdAt: Number(data['createdAtMs'] ?? 0),
@@ -191,7 +205,7 @@ export async function createPatient(input: {
     problem: input.problem?.trim() ?? '',
     notes: input.notes?.trim() ?? '',
     registeredAt,
-    lastVisit: '—',
+    lastVisit: '',
     total: 0,
     paid: 0,
     createdAtMs: now,
@@ -201,19 +215,22 @@ export async function createPatient(input: {
   return ref.id
 }
 
-export async function deletePatient(id: string) {
-  const visitsSnap = await getDocs(query(collection(getDb(), 'visits'), where('patientId', '==', id)))
-  const paymentsSnap = await getDocs(query(collection(getDb(), 'payments'), where('patientId', '==', id)))
-  const queueSnap = await getDocs(query(collection(getDb(), 'queue'), where('patientId', '==', id)))
-  const appointmentsSnap = await getDocs(query(collection(getDb(), 'appointments'), where('patientId', '==', id)))
+/** Firestore بيقبل 500 عملية بالكتير في الـ batch الواحد */
+const BATCH_LIMIT = 450
 
-  await Promise.all([
-    ...visitsSnap.docs.map((d) => deleteDoc(d.ref)),
-    ...paymentsSnap.docs.map((d) => deleteDoc(d.ref)),
-    ...queueSnap.docs.map((d) => deleteDoc(d.ref)),
-    ...appointmentsSnap.docs.map((d) => deleteDoc(d.ref)),
-  ])
-  await deleteDoc(doc(getDb(), 'patients', id))
+export async function deletePatient(id: string) {
+  const db = getDb()
+  const snaps = await Promise.all(
+    ['visits', 'payments', 'queue', 'appointments'].map((name) =>
+      getDocs(query(collection(db, name), where('patientId', '==', id))),
+    ),
+  )
+  const refs = [...snaps.flatMap((s) => s.docs.map((d) => d.ref)), doc(db, 'patients', id)]
+  for (let i = 0; i < refs.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db)
+    for (const ref of refs.slice(i, i + BATCH_LIMIT)) batch.delete(ref)
+    await batch.commit()
+  }
 }
 
 export async function listVisitsForPatient(patientId: string) {
@@ -250,7 +267,7 @@ export async function createVisit(input: {
       ...touch(),
       total: patient.total + visit.final,
       paid: patient.paid + visit.paid,
-      lastVisit: 'اليوم',
+      ...visitedNow(),
       ...(input.keepProblem ? {} : { problem: input.treatment.trim() }),
     })
   })
@@ -298,25 +315,44 @@ function visitWrites(
   if (paid > 0) {
     writes.push([
       doc(collection(db, 'payments')),
-      {
+      paymentDoc({
         patientId: input.patientId,
-        patient: input.patientName,
+        patientName: input.patientName,
         amount: paid,
-        date: formatArabicDateTime(),
-        method: 'نقدي',
-        note: '',
         kind: treatment === NEW_PATIENT_FEE_NAME ? 'كشف' : 'علاج',
-        createdAtMs: input.now,
-        createdAt: serverTimestamp(),
-        ...stamp(),
-      },
+        now: input.now,
+      }),
     ])
   }
   return { writes, final: charge.final, paid }
 }
 
-export async function listPayments() {
-  const snap = await getDocs(collection(getDb(), 'payments'))
+function paymentDoc(input: {
+  patientId: string
+  patientName: string
+  amount: number
+  kind: PaymentKind
+  now: number
+  method?: string
+  note?: string
+}) {
+  return {
+    patientId: input.patientId,
+    patient: input.patientName,
+    amount: input.amount,
+    date: formatArabicDateTime(new Date(input.now)),
+    method: input.method ?? 'نقدي',
+    note: input.note?.trim() ?? '',
+    kind: input.kind,
+    createdAtMs: input.now,
+    createdAt: serverTimestamp(),
+    ...stamp(),
+  }
+}
+
+export async function listPayments(sinceMs?: number) {
+  const ref = collection(getDb(), 'payments')
+  const snap = await getDocs(sinceMs === undefined ? ref : query(ref, where('createdAtMs', '>=', sinceMs)))
   return snap.docs
     .map((d) => mapPayment(d.id, d.data()))
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
@@ -330,6 +366,7 @@ export async function createPayment(input: {
 }) {
   const db = getDb()
   let remaining = 0
+  let paidAmount = 0
 
   await runTransaction(db, async (tx) => {
     const patientRef = doc(db, 'patients', input.patientId)
@@ -340,23 +377,22 @@ export async function createPayment(input: {
     const due = Math.max(0, patient.total - patient.paid)
     if (due <= 0) throw new Error('مفيش باقي على المريض')
 
-    const amount = Math.max(0, Math.min(input.amount, due))
-    if (amount <= 0) throw new Error('أدخل مبلغ صحيح')
+    const amount = Math.round(input.amount)
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('أدخل مبلغ صحيح')
+    if (amount > due) throw new Error(`المبلغ أكبر من الباقي على المريض (${due.toLocaleString('en-EG')} جنيه)`)
 
-    const now = Date.now()
-    const paymentRef = doc(collection(db, 'payments'))
-    tx.set(paymentRef, {
-      patientId: input.patientId,
-      patient: patient.name,
-      amount,
-      date: formatArabicDateTime(),
-      method: input.method ?? 'نقدي',
-      note: input.note?.trim() ?? '',
-      kind: 'دفعة',
-      createdAtMs: now,
-      createdAt: serverTimestamp(),
-      ...stamp(),
-    })
+    tx.set(
+      doc(collection(db, 'payments')),
+      paymentDoc({
+        patientId: input.patientId,
+        patientName: patient.name,
+        amount,
+        kind: 'دفعة',
+        now: Date.now(),
+        ...(input.method ? { method: input.method } : {}),
+        ...(input.note ? { note: input.note } : {}),
+      }),
+    )
 
     tx.update(patientRef, {
       ...touch(),
@@ -364,37 +400,48 @@ export async function createPayment(input: {
     })
 
     remaining = Math.max(0, due - amount)
+    paidAmount = amount
   })
 
-  return { remaining }
+  return { remaining, amount: paidAmount }
 }
 
-export async function listTodayQueue() {
-  const key = dayKey()
-  const snap = await getDocs(query(collection(getDb(), 'queue'), where('dayKey', '==', key)))
-  return snap.docs
-    .map((d) => mapQueue(d.id, d.data()))
-    .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
+/** الباقي عند المرضى كلهم — مجموع من السيرفر من غير ما نقرا كل المرضى */
+export async function getOutstandingTotal() {
+  const snap = await getAggregateFromServer(collection(getDb(), 'patients'), {
+    total: sum('total'),
+    paid: sum('paid'),
+  })
+  const { total, paid } = snap.data()
+  return Math.max(0, (total ?? 0) - (paid ?? 0))
 }
 
-export function subscribeTodayQueue(onData: (queue: QueueEntry[]) => void, onError: (err: Error) => void) {
-  const key = dayKey()
-  return onSnapshot(
-    query(collection(getDb(), 'queue'), where('dayKey', '==', key)),
-    (snap) =>
-      onData(
-        snap.docs
-          .map((d) => mapQueue(d.id, d.data()))
-          .sort((a, b) => a.order - b.order || a.createdAt - b.createdAt),
-      ),
-    onError,
-  )
+export async function getPaymentsTotal() {
+  const snap = await getAggregateFromServer(collection(getDb(), 'payments'), { amount: sum('amount') })
+  return snap.data().amount ?? 0
+}
+
+const dayQueueQuery = (key: string) => query(collection(getDb(), 'queue'), where('dayKey', '==', key))
+
+const sortQueue = (docs: Array<{ id: string; data: () => DocumentData }>) =>
+  docs.map((d) => mapQueue(d.id, d.data())).sort((a, b) => a.order - b.order || a.createdAt - b.createdAt)
+
+export async function listTodayQueue(key = dayKey()) {
+  return sortQueue((await getDocs(dayQueueQuery(key))).docs)
+}
+
+export function subscribeTodayQueue(
+  key: string,
+  onData: (queue: QueueEntry[]) => void,
+  onError: (err: Error) => void,
+) {
+  return onSnapshot(dayQueueQuery(key), (snap) => onData(sortQueue(snap.docs)), onError)
 }
 
 /** قراءة واحدة لزيارات النهاردة: رقم الترتيب الجاي، وهل المريض متسجل بالفعل */
 async function todayQueueState(patientId?: string) {
   const key = dayKey()
-  const snap = await getDocs(query(collection(getDb(), 'queue'), where('dayKey', '==', key)))
+  const snap = await getDocs(dayQueueQuery(key))
   let max = 0
   let alreadyHere = false
   for (const d of snap.docs) {
@@ -437,6 +484,8 @@ function queueDoc(input: {
 }
 
 type ChargeInput = { basePrice: number; discountPercent?: number; paidToday: number }
+
+export const ALREADY_HERE_ERROR = 'المريض ده متسجل إنه جه النهاردة بالفعل'
 
 export async function checkInNewPatient(input: {
   name: string
@@ -490,7 +539,7 @@ export async function checkInNewPatient(input: {
     problem: reason,
     notes: '',
     registeredAt: formatArabicDate(),
-    lastVisit: 'اليوم',
+    ...visitedNow(),
     total: fee.final + (charge?.final ?? 0),
     paid: fee.paid + (charge?.paid ?? 0),
     createdAtMs: now,
@@ -522,11 +571,20 @@ export async function checkInFollowupPatient(input: {
   reason?: string
   isNewTreatment?: boolean
   charge?: ChargeInput
+  /** دفعة من الحساب القديم — بتتسجل مع الحضور في نفس الحفظة */
+  oldPayment?: number
 }) {
   const db = getDb()
-  const [patient, state] = await Promise.all([getPatient(input.patientId), todayQueueState(input.patientId)])
+  const [patient, state, appointmentsSnap] = await Promise.all([
+    getPatient(input.patientId),
+    todayQueueState(input.patientId),
+    getDocs(query(collection(db, 'appointments'), where('patientId', '==', input.patientId))),
+  ])
   if (!patient) throw new Error('المريض غير موجود')
-  if (state.alreadyHere) throw new Error('المريض ده متسجل إنه جه النهاردة بالفعل')
+  if (state.alreadyHere) throw new Error(ALREADY_HERE_ERROR)
+  const oldPayment = Math.round(input.oldPayment ?? 0)
+  if (!Number.isFinite(oldPayment) || oldPayment < 0) throw new Error('أدخل مبلغ صحيح')
+  if (oldPayment > Math.max(0, patient.total - patient.paid)) throw new Error('المدفوع من القديم أكبر من اللي عليه')
 
   const reason = input.reason?.trim() || patient.problem?.trim() || 'متابعة'
   const now = Date.now()
@@ -560,115 +618,35 @@ export async function checkInFollowupPatient(input: {
       ...(charge ? { billedTotal: charge.final } : {}),
     }),
   )
+  const paidNow = (charge?.paid ?? 0) + oldPayment
   batch.update(doc(db, 'patients', patient.id), {
     ...touch(),
-    lastVisit: 'اليوم',
+    ...visitedNow(now),
     ...(changeProblem ? { problem: reason } : {}),
-    ...(charge ? { total: increment(charge.final), paid: increment(charge.paid) } : {}),
+    ...(charge ? { total: increment(charge.final) } : {}),
+    ...(paidNow > 0 ? { paid: increment(paidNow) } : {}),
   })
   for (const [ref, data] of charge?.writes ?? []) batch.set(ref, data)
+  if (oldPayment > 0) {
+    batch.set(
+      doc(collection(db, 'payments')),
+      paymentDoc({
+        patientId: patient.id,
+        patientName: patient.name,
+        amount: oldPayment,
+        kind: 'دفعة',
+        note: 'من الحساب القديم',
+        now: now + 2,
+      }),
+    )
+  }
+  for (const d of appointmentsSnap.docs) {
+    const a = mapAppointment(d.id, d.data())
+    if (a.date === state.key && a.status === 'upcoming') batch.update(d.ref, { status: 'arrived', ...touch() })
+  }
   await batch.commit()
 
   return { patientId: patient.id, id: queueRef.id, order: state.order }
-}
-
-export async function updateQueueStatus(id: string, status: QueueStatus) {
-  await updateDoc(doc(getDb(), 'queue', id), { status, ...touch() })
-}
-
-export async function getQueueEntry(id: string) {
-  const ref = await getDoc(doc(getDb(), 'queue', id))
-  if (!ref.exists()) return null
-  return mapQueue(ref.id, ref.data())
-}
-
-/** بعد الكشف: تسجيل الاتفاق والسعر والمدفوع ثم إنهاء الدور — دفعة واحدة atomic */
-export async function settleQueueBilling(input: {
-  queueId: string
-  treatment?: string
-  basePrice: number
-  discountPercent?: number
-  paidToday: number
-  notes?: string
-}) {
-  if (input.basePrice <= 0) throw new Error('أدخل سعر الاتفاق')
-  const charge = applyDiscount(input.basePrice, input.discountPercent)
-  const paidToday = Math.max(0, Math.min(input.paidToday, charge.final))
-  const now = Date.now()
-  const date = formatArabicDate()
-  const db = getDb()
-  let patientId = ''
-
-  await runTransaction(db, async (tx) => {
-    const queueRef = doc(db, 'queue', input.queueId)
-    const queueSnap = await tx.get(queueRef)
-    if (!queueSnap.exists()) throw new Error('الدور غير موجود')
-
-    const entry = mapQueue(queueSnap.id, queueSnap.data())
-    patientId = entry.patientId
-
-    if (entry.status === 'تم الكشف' || entry.status === 'ملغي') {
-      throw new Error('الدور ده خلص بالفعل')
-    }
-    if (entry.status === 'في الانتظار') {
-      throw new Error('المريض لسه في الانتظار — دخّله للدكتور الأول')
-    }
-
-    const patientRef = doc(db, 'patients', entry.patientId)
-    const patientSnap = await tx.get(patientRef)
-    if (!patientSnap.exists()) throw new Error('المريض غير موجود')
-    const patient = mapPatient(patientSnap.id, patientSnap.data())
-
-    const treatment = input.treatment?.trim() || entry.reason || 'كشف'
-
-    tx.update(queueRef, { status: 'تم الكشف', reason: treatment, ...touch() })
-
-    const visitRef = doc(collection(db, 'visits'))
-    tx.set(visitRef, {
-      patientId: entry.patientId,
-      patientName: patient.name,
-      treatment,
-      doctor: '',
-      price: charge.final,
-      basePrice: charge.base,
-      discountPercent: charge.percent,
-      discountAmount: charge.discountAmount,
-      paidToday,
-      notes: input.notes?.trim() ?? '',
-      date,
-      queueId: input.queueId,
-      createdAtMs: now,
-      createdAt: serverTimestamp(),
-      ...stamp(),
-    })
-
-    if (paidToday > 0) {
-      const paymentRef = doc(collection(db, 'payments'))
-      tx.set(paymentRef, {
-        patientId: entry.patientId,
-        patient: patient.name,
-        amount: paidToday,
-        date: formatArabicDateTime(),
-        method: 'نقدي',
-        note: '',
-        kind: 'علاج',
-        queueId: input.queueId,
-        createdAtMs: now,
-        createdAt: serverTimestamp(),
-        ...stamp(),
-      })
-    }
-
-    tx.update(patientRef, {
-      ...touch(),
-      total: patient.total + charge.final,
-      paid: patient.paid + paidToday,
-      lastVisit: 'اليوم',
-      problem: treatment,
-    })
-  })
-
-  return { patientId }
 }
 
 export async function listServices() {
@@ -678,20 +656,35 @@ export async function listServices() {
     .sort((a, b) => a.createdAt - b.createdAt)
 }
 
-export async function createService(input: { name: string; price: number }) {
-  const name = input.name.trim()
-  if (!name) throw new Error('اكتب اسم الخدمة')
-  if (name.includes('+')) throw new Error('اسم الخدمة ما ينفعش يكون فيه علامة +')
-  if (!Number.isFinite(input.price) || input.price < 0) throw new Error('السعر غير صحيح')
-  const existing = await listServices()
-  if (existing.some((s) => s.name === name)) throw new Error('الخدمة دي موجودة بالفعل')
-  await addDoc(collection(getDb(), 'services'), {
-    name,
-    price: Math.round(input.price),
-    createdAtMs: Date.now(),
-    createdAt: serverTimestamp(),
-    ...stamp(),
+type ServiceInput = { name: string; price: number }
+
+/** واحدة بترمي خطأ لو موجودة؛ أكتر من واحدة بتتخطى الموجود وتتكتب مرة واحدة */
+export async function createService(input: ServiceInput | ServiceInput[]) {
+  const many = Array.isArray(input)
+  const items = (many ? input : [input]).map((s) => {
+    const name = s.name.trim()
+    if (!name) throw new Error('اكتب اسم الخدمة')
+    if (name.includes('+')) throw new Error('اسم الخدمة ما ينفعش يكون فيه علامة +')
+    if (!Number.isFinite(s.price) || s.price < 0) throw new Error('السعر غير صحيح')
+    return { name, price: Math.round(s.price) }
   })
+  const taken = new Set((await listServices()).map((s) => s.name))
+  if (!many && taken.has(items[0]!.name)) throw new Error('الخدمة دي موجودة بالفعل')
+
+  const db = getDb()
+  const batch = writeBatch(db)
+  const now = Date.now()
+  items.forEach((s, i) => {
+    if (taken.has(s.name)) return
+    taken.add(s.name)
+    batch.set(doc(collection(db, 'services')), {
+      ...s,
+      createdAtMs: now + i,
+      createdAt: serverTimestamp(),
+      ...stamp(),
+    })
+  })
+  await batch.commit()
 }
 
 export async function updateServicePrice(id: string, price: number) {
@@ -797,8 +790,8 @@ export async function createAppointment(input: { patientId: string; date: string
 }
 
 /** المواعيد من النهاردة ورايح */
-export async function listUpcomingAppointments() {
-  const snap = await getDocs(query(collection(getDb(), 'appointments'), where('date', '>=', dayKey())))
+export async function listUpcomingAppointments(fromKey = dayKey()) {
+  const snap = await getDocs(query(collection(getDb(), 'appointments'), where('date', '>=', fromKey)))
   return snap.docs.map((d) => mapAppointment(d.id, d.data())).sort(byDateTime)
 }
 
@@ -834,9 +827,22 @@ function mapSettings(data: DocumentData | undefined): ClinicSettings {
   }
 }
 
+const SETTINGS_TIMEOUT_MS = 8000
+
 export async function getClinicSettings() {
-  const snap = await getDoc(doc(getDb(), 'settings', 'clinic'))
-  return mapSettings(snap.exists() ? snap.data() : undefined)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(Object.assign(new Error('settings timeout'), { code: 'unavailable' })),
+      SETTINGS_TIMEOUT_MS,
+    )
+  })
+  try {
+    const snap = await Promise.race([getDoc(doc(getDb(), 'settings', 'clinic')), timeout])
+    return mapSettings(snap.exists() ? snap.data() : undefined)
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function saveClinicSettings(input: ClinicSettings) {

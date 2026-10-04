@@ -9,8 +9,9 @@ import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
 import { Button } from '@/components/ui/button'
-import { useCheckInFollowup, useCreatePayment, usePatients } from '@/lib/clinic-hooks'
+import { useCheckInFollowup, usePatients } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
+import { patientBalance } from '@/lib/pricing'
 import { cn } from '@/lib/utils'
 import type { Patient } from '@/types'
 
@@ -31,7 +32,6 @@ export const Route = createFileRoute('/check-in/followup')({
 function CheckInFollowup() {
   const nav = useNavigate()
   const checkIn = useCheckInFollowup()
-  const collect = useCreatePayment()
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState('')
   const [oldPaid, setOldPaid] = useState('')
@@ -40,7 +40,7 @@ function CheckInFollowup() {
   const form = useChargeForm()
 
   const selected = useMemo(() => patients.find((p) => p.id === patientId) ?? null, [patients, patientId])
-  const oldRemaining = selected ? Math.max(0, selected.total - selected.paid) : 0
+  const oldRemaining = selected ? patientBalance(selected) : 0
 
   const toggleNew = (open: boolean) => {
     setShowNew(open)
@@ -91,11 +91,9 @@ function CheckInFollowup() {
         ...(charge.base > 0
           ? { charge: { basePrice: charge.base, discountPercent: form.discount, paidToday: paidN } }
           : {}),
+        ...(oldPaidN > 0 ? { oldPayment: oldPaidN } : {}),
       })
-      if (oldPaidN > 0) {
-        await collect.mutateAsync({ patientId, amount: oldPaidN, method: 'نقدي', note: 'من الحساب القديم' })
-      }
-      toast.success('اتسجل إنه جه النهاردة ✅')
+      toast.success(oldPaidN > 0 ? `اتسجل إنه جه النهاردة ودفع ${money(oldPaidN)} ✅` : 'اتسجل إنه جه النهاردة ✅')
       void nav({ to: '/', replace: true })
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء التسجيل'))
@@ -123,7 +121,7 @@ function CheckInFollowup() {
         <>
           <div className="col-span-full grid content-start gap-2.5 lg:col-span-1">
             <PatientSummary patient={selected} remaining={oldRemaining} />
-            <OldBalance patientId={selected.id} oldPaid={oldPaid} setOldPaid={setOldPaid} remaining={oldRemaining} />
+            <OldBalance oldPaid={oldPaid} setOldPaid={setOldPaid} remaining={oldRemaining} />
 
             <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
               <div className="min-w-0 flex-1">
@@ -199,41 +197,14 @@ function PatientSummary({ patient: p, remaining }: { patient: Patient; remaining
 }
 
 function OldBalance({
-  patientId,
   remaining,
   oldPaid,
   setOldPaid,
 }: {
-  patientId: string
   remaining: number
   oldPaid: string
   setOldPaid: (v: string) => void
 }) {
-  const collect = useCreatePayment()
-
-  const payNow = async () => {
-    const amount = Number(oldPaid || 0)
-    if (amount <= 0) {
-      toast.error('اكتب المبلغ الأول')
-      return
-    }
-    if (amount > remaining) {
-      toast.error('المبلغ أكبر من اللي عليه')
-      return
-    }
-    try {
-      const result = await collect.mutateAsync({ patientId, amount, method: 'نقدي', note: 'من الحساب القديم' })
-      toast.success(
-        result.remaining > 0
-          ? `تم دفع ${money(amount)} — لسه عليه ${money(result.remaining)}`
-          : `تم دفع ${money(amount)} — حسابه بقى خالص ✅`,
-      )
-      setOldPaid('')
-    } catch (err) {
-      toast.error(errorText(err, 'حصل خطأ أثناء الدفع'))
-    }
-  }
-
   if (remaining <= 0) {
     return (
       <p className="inline-flex items-center gap-1.5 rounded-xl border border-success/25 bg-success/5 px-3 py-2.5 text-sm font-semibold text-success">
@@ -251,36 +222,27 @@ function OldBalance({
         </span>
         <span className="text-xs text-warning">عليه {money(remaining)}</span>
       </label>
-      <div className="flex gap-2">
-        <div className="relative min-w-0 flex-1">
-          <input
-            id="old-paid"
-            className={cn(inputClass, 'bg-card pl-16')}
-            type="number"
-            min="0"
-            max={remaining}
-            step="1"
-            value={oldPaid}
-            onChange={(e) => setOldPaid(e.target.value)}
-            placeholder="0"
-          />
-          <button
-            type="button"
-            onClick={() => setOldPaid(String(remaining))}
-            className="absolute left-1.5 top-1/2 h-8 -translate-y-1/2 rounded-lg bg-primary/10 px-2.5 text-xs font-semibold text-primary"
-          >
-            الكل
-          </button>
-        </div>
-        <Button
+      <div className="relative">
+        <input
+          id="old-paid"
+          className={cn(inputClass, 'bg-card pl-16')}
+          type="number"
+          min="0"
+          max={remaining}
+          step="1"
+          value={oldPaid}
+          onChange={(e) => setOldPaid(e.target.value)}
+          placeholder="0"
+        />
+        <button
           type="button"
-          className="h-11 shrink-0 rounded-xl px-5 sm:h-10"
-          disabled={collect.isPending || !Number(oldPaid)}
-          onClick={payNow}
+          onClick={() => setOldPaid(String(remaining))}
+          className="absolute left-1.5 top-1/2 h-8 -translate-y-1/2 rounded-lg bg-primary/10 px-2.5 text-xs font-semibold text-primary"
         >
-          {collect.isPending ? 'جاري...' : 'دفع'}
-        </Button>
+          الكل
+        </button>
       </div>
+      <p className="text-[11px] font-normal text-muted-foreground">بيتسجل مع تسجيل الحضور</p>
     </div>
   )
 }

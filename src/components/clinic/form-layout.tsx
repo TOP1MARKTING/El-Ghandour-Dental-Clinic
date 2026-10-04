@@ -7,7 +7,6 @@ import { cn } from '@/lib/utils'
 
 export const inputClass =
   'h-11 w-full rounded-xl border border-input bg-card px-3.5 text-base text-foreground outline-none transition placeholder:text-muted-foreground/70 hover:border-foreground/20 focus:border-primary focus:ring-4 focus:ring-primary/10 sm:h-10 sm:text-[15px]'
-export const selectClass = inputClass
 export const areaClass =
   'min-h-16 w-full resize-none rounded-xl border border-input bg-card px-3.5 py-2.5 text-base text-foreground outline-none transition placeholder:text-muted-foreground/70 hover:border-foreground/20 focus:border-primary focus:ring-4 focus:ring-primary/10 sm:text-[15px]'
 

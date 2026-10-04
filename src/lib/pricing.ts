@@ -15,6 +15,11 @@ export function clampPercent(value: number) {
   return Math.min(100, Math.max(0, Math.round(value)))
 }
 
+/** الباقي على المريض — عمره ما يطلع بالسالب */
+export function patientBalance(p: { total: number; paid: number }) {
+  return Math.max(0, p.total - p.paid)
+}
+
 export function applyDiscount(basePrice: number, discountPercent = 0) {
   const base = Math.max(0, Math.round(basePrice))
   const percent = clampPercent(discountPercent)

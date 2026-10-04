@@ -1,9 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { money } from '@/lib/format'
 import { usePatients } from '@/lib/clinic-hooks'
 import { CLIENT_ONLY_ERROR } from '@/lib/backend'
+import { apiErrorMessage } from '@/lib/api-errors'
+import { patientBalance } from '@/lib/pricing'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { PageSurface } from '@/components/clinic/app-shell'
 import { EmptyState, LoadingSkeleton, PageHeader, SearchBar } from '@/components/clinic/ui'
 import { PatientCard } from '@/components/clinic/cards'
@@ -23,28 +26,23 @@ export const Route = createFileRoute('/patients/')({
   component: Patients,
 })
 
+const MAX_ROWS = 100
+
 function Patients() {
   const [q, setQ] = useState('')
+  const term = useDeferredValue(q.trim())
+  const isMobile = useIsMobile()
   const { data: patients = [], isLoading, isError, error, refetch } = usePatients()
-  const list = useMemo(
-    () => patients.filter((x) => x.name.includes(q) || x.phone.includes(q)),
-    [patients, q],
+  const matches = useMemo(
+    () => (term ? patients.filter((x) => x.name.includes(term) || x.phone.includes(term)) : patients),
+    [patients, term],
   )
+  const list = matches.slice(0, MAX_ROWS)
 
-  const errorHint = (() => {
-    const code = (error as { code?: string } | null)?.code ?? ''
-    const msg = error instanceof Error ? error.message : ''
-    if (code === 'permission-denied' || /permission/i.test(msg)) {
-      return 'مفيش صلاحية لعرض المرضى'
-    }
-    if (/not.?found|does not exist|404/i.test(msg)) {
-      return 'قاعدة البيانات مش متاحة دلوقتي'
-    }
-    if (msg === CLIENT_ONLY_ERROR) {
-      return 'جاري التحميل على المتصفح...'
-    }
-    return 'تعذر تحميل المرضى'
-  })()
+  const errorHint =
+    error instanceof Error && error.message === CLIENT_ONLY_ERROR
+      ? 'جاري التحميل على المتصفح...'
+      : apiErrorMessage(error)
 
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
@@ -68,12 +66,7 @@ function Patients() {
         </div>
       ) : isError ? (
         <div className="mt-3">
-          <EmptyState
-            title={errorHint}
-            action={
-              <Button onClick={() => void refetch()}>إعادة المحاولة</Button>
-            }
-          />
+          <EmptyState title={errorHint} action={<Button onClick={() => void refetch()}>إعادة المحاولة</Button>} />
         </div>
       ) : list.length === 0 ? (
         <div className="mt-3">
@@ -90,45 +83,53 @@ function Patients() {
         </div>
       ) : (
         <>
-          <div className="mt-3 grid min-h-0 flex-1 content-start gap-2 overflow-auto sm:grid-cols-2 md:hidden">
-            {list.map((x) => (
-              <PatientCard key={x.id} patient={x} />
-            ))}
-          </div>
-          <div className="glass mt-3 hidden min-h-0 flex-1 overflow-auto rounded-2xl md:block">
-            <table className="w-full text-right">
-              <thead className="sticky top-0 border-b border-border bg-muted text-sm text-muted-foreground">
-                <tr>
-                  {['اسم المريض', 'رقم الهاتف', 'السن', 'آخر زيارة', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
-                    <th key={x} className="whitespace-nowrap px-3 py-2.5 font-semibold xl:px-4 xl:py-3">
-                      {x}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((x) => (
-                  <tr key={x.id} className="border-b border-border/70 last:border-0">
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3 font-semibold">{x.name}</td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3" dir="ltr">
-                      {x.phone}
-                    </td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.age || '—'}</td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.lastVisit}</td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-success">{money(x.paid)}</td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-warning">{money(x.total - x.paid)}</td>
-                    <td className="px-3 py-2.5 xl:px-4 xl:py-3">
-                      <Button asChild size="sm" variant="outline">
-                        <Link to="/patients/$patientId" params={{ patientId: x.id }}>
-                          عرض الملف
-                        </Link>
-                      </Button>
-                    </td>
+          {isMobile ? (
+            <div className="mt-3 grid min-h-0 flex-1 content-start gap-2 overflow-auto sm:grid-cols-2">
+              {list.map((x) => (
+                <PatientCard key={x.id} patient={x} />
+              ))}
+            </div>
+          ) : (
+            <div className="glass mt-3 min-h-0 flex-1 overflow-auto rounded-2xl">
+              <table className="w-full text-right">
+                <thead className="sticky top-0 border-b border-border bg-muted text-sm text-muted-foreground">
+                  <tr>
+                    {['اسم المريض', 'رقم الهاتف', 'السن', 'آخر زيارة', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
+                      <th key={x} className="whitespace-nowrap px-3 py-2.5 font-semibold xl:px-4 xl:py-3">
+                        {x}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {list.map((x) => (
+                    <tr key={x.id} className="border-b border-border/70 last:border-0">
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3 font-semibold">{x.name}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3" dir="ltr">
+                        {x.phone}
+                      </td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.age || '—'}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.lastVisit || '—'}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-success">{money(x.paid)}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-warning">{money(patientBalance(x))}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3">
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/patients/$patientId" params={{ patientId: x.id }}>
+                            عرض الملف
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {matches.length > MAX_ROWS ? (
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              ظاهر أول {MAX_ROWS} من {matches.length} — ابحث بالاسم أو الموبايل عشان توصل للباقي
+            </p>
+          ) : null}
         </>
       )}
     </PageSurface>

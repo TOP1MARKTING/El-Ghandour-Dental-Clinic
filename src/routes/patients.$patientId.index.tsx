@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
 import { dayKey, money, withWeekday } from '@/lib/format'
+import { patientBalance } from '@/lib/pricing'
 import {
   useCreatePayment,
   useCreateVisit,
@@ -70,6 +71,8 @@ function Profile() {
   const { patientId } = Route.useParams()
   const { data: p, isLoading, isError } = usePatient(patientId)
   const { data: visits = [] } = usePatientVisits(patientId)
+  usePatientPayments(patientId)
+  usePatientAppointments(patientId)
   if (isLoading) {
     return (
       <PageSurface>
@@ -111,7 +114,7 @@ type TabId = 'new' | 'history' | 'appointments'
 
 function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] }) {
   const patientId = patient.id
-  const [tab, setTab] = useState<TabId>('new')
+  const [tab, setTab] = useState<TabId>('appointments')
   const [formKey, setFormKey] = useState(0)
   const { data: payments = [], isLoading: paymentsLoading } = usePatientPayments(patientId)
   const upcoming = useUpcomingPatientAppointments(patientId)
@@ -196,6 +199,16 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="min-w-0 text-xl font-bold leading-snug sm:truncate sm:text-2xl">{p.name}</h1>
+            {p.phone ? (
+              <a
+                href={`tel:${p.phone}`}
+                dir="ltr"
+                className="inline-flex items-center gap-1.5 text-xl font-bold leading-snug text-primary hover:underline sm:text-2xl"
+              >
+                <Phone className="size-4 sm:size-5" />
+                {p.phone}
+              </a>
+            ) : null}
             {p.problem ? (
               <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground">
                 <ToothIcon className="size-3.5 shrink-0" />
@@ -204,12 +217,6 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
             ) : null}
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground sm:gap-x-4 sm:text-sm">
-            {p.phone ? (
-              <a href={`tel:${p.phone}`} dir="ltr" className="inline-flex items-center gap-1 font-semibold text-foreground hover:text-primary">
-                <Phone className="size-3.5 text-primary" />
-                {p.phone}
-              </a>
-            ) : null}
             {p.age ? (
               <span className="inline-flex items-center gap-1">
                 <UserRound className="size-3.5 text-primary" />
@@ -244,7 +251,7 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
 }
 
 function AccountCard({ patient: p }: { patient: Patient }) {
-  const remaining = Math.max(0, p.total - p.paid)
+  const remaining = patientBalance(p)
   const next = useUpcomingPatientAppointments(p.id)[0]
 
   return (
@@ -316,11 +323,9 @@ function TodayStatus({ patient: p }: { patient: Patient }) {
   const status =
     entry.status === 'في الانتظار'
       ? `مستني دوره (رقم ${entry.order})`
-      : entry.status === 'عند الدكتور'
-        ? 'عند الدكتور دلوقتي'
-        : entry.status === 'بانتظار الحساب'
-          ? 'خلّص — مستني الحساب'
-          : 'خلّص النهاردة'
+      : entry.status === 'بانتظار الحساب'
+        ? 'خلّص — مستني الحساب'
+        : 'خلّص النهاردة'
 
   return (
     <div className="mt-2 flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
@@ -524,8 +529,8 @@ function QuickCollect({
       })
       toast.success(`تم تحصيل ${money(value)} من ${patientName}`)
       setAmount('')
-    } catch {
-      toast.error('حصل خطأ أثناء التحصيل')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء التحصيل'))
     } finally {
       setSaving(false)
     }
@@ -589,8 +594,8 @@ function DeletePatient({ id, name }: { id: string; name: string }) {
                 await remove.mutateAsync(id)
                 toast.success('تم حذف المريض')
                 void nav({ to: '/patients' })
-              } catch {
-                toast.error('حصل خطأ أثناء الحذف')
+              } catch (err) {
+                toast.error(errorText(err, 'حصل خطأ أثناء الحذف'))
               }
             }}
           >

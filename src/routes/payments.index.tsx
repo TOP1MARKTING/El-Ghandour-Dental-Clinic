@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { money, startOfDay, startOfMonth, startOfWeek } from '@/lib/format'
-import { usePatients, usePayments } from '@/lib/clinic-hooks'
+import { money, parseDayKey, startOfDay, startOfMonth, startOfWeek } from '@/lib/format'
+import { usePayments, usePaymentsTotal, useTodayKey } from '@/lib/clinic-hooks'
 import { PageSurface } from '@/components/clinic/app-shell'
 import { AdminOnly } from '@/components/clinic/admin-only'
 import { KindFilterTabs, PaymentList, type KindFilter } from '@/components/clinic/payment-list'
@@ -29,38 +29,55 @@ export const Route = createFileRoute('/payments/')({
   ),
 })
 
+type PeriodId = 'day' | 'week' | 'month' | 'all'
+
+const nameOf = (p: Payment) => p.patient
+
 function Payments() {
   const [q, setQ] = useState('')
   const [kind, setKind] = useState<KindFilter>('all')
-  const { data: payments = [], isLoading, isError, refetch } = usePayments()
-  const { data: patients = [] } = usePatients()
-  const byId = useMemo(() => Object.fromEntries(patients.map((p) => [p.id, p.name])), [patients])
-  const nameOf = (p: Payment) => byId[p.patientId] ?? p.patient
+  const [periodId, setPeriodId] = useState<PeriodId>('week')
+  const todayKey = useTodayKey()
+  const bounds = useMemo(() => {
+    const today = parseDayKey(todayKey)
+    return {
+      day: startOfDay(today).getTime(),
+      week: startOfWeek(today).getTime(),
+      month: startOfMonth(today).getTime(),
+      all: 0,
+    }
+  }, [todayKey])
 
-  const searched = useMemo(() => {
-    const term = q.trim()
-    if (!term) return payments
-    return payments.filter((x) =>
-      [byId[x.patientId] ?? x.patient, x.note ?? '', x.method].some((field) => field.includes(term)),
-    )
-  }, [payments, byId, q])
+  // الأسبوع والشهر من قراية واحدة — «الكل» بيتحمّل بس لما يتفتح
+  const recent = usePayments(Math.min(bounds.week, bounds.month))
+  const everything = usePayments(undefined, periodId === 'all')
+  const { data: allTotal } = usePaymentsTotal()
+  const source = periodId === 'all' ? everything : recent
+  const { isLoading, isError, refetch } = source
+  const payments = useMemo(() => source.data ?? [], [source.data])
+  const recentPayments = recent.data
 
   const periods = useMemo(() => {
-    const now = new Date()
-    const sum = (from: number) => payments.reduce((s, p) => ((p.createdAt ?? 0) >= from ? s + p.amount : s), 0)
-    return (
-      [
-        { id: 'day', label: 'النهاردة', from: startOfDay(now).getTime() },
-        { id: 'week', label: 'الأسبوع ده', from: startOfWeek(now).getTime() },
-        { id: 'month', label: 'الشهر ده', from: startOfMonth(now).getTime() },
-        { id: 'all', label: 'الكل', from: 0 },
-      ] as const
-    ).map((p) => ({ ...p, total: sum(p.from) }))
-  }, [payments])
-  const [periodId, setPeriodId] = useState<(typeof periods)[number]['id']>('week')
-  const from = periods.find((p) => p.id === periodId)?.from ?? 0
-  const inPeriod = from ? searched.filter((x) => (x.createdAt ?? 0) >= from) : searched
-  const list = kind === 'all' ? inPeriod : inPeriod.filter((x) => x.kind === kind)
+    const list = recentPayments ?? []
+    const sum = (from: number) => list.reduce((s, p) => ((p.createdAt ?? 0) >= from ? s + p.amount : s), 0)
+    return [
+      { id: 'day', label: 'النهاردة', total: sum(bounds.day) },
+      { id: 'week', label: 'الأسبوع ده', total: sum(bounds.week) },
+      { id: 'month', label: 'الشهر ده', total: sum(bounds.month) },
+      { id: 'all', label: 'الكل', total: allTotal ?? 0 },
+    ] satisfies Array<{ id: PeriodId; label: string; total: number }>
+  }, [recentPayments, bounds, allTotal])
+
+  const inPeriod = useMemo(() => {
+    const from = bounds[periodId]
+    const term = q.trim()
+    return payments.filter(
+      (x) =>
+        (x.createdAt ?? 0) >= from &&
+        (!term || [x.patient, x.note ?? '', x.method].some((field) => field.includes(term))),
+    )
+  }, [payments, bounds, periodId, q])
+  const list = useMemo(() => (kind === 'all' ? inPeriod : inPeriod.filter((x) => x.kind === kind)), [inPeriod, kind])
 
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">

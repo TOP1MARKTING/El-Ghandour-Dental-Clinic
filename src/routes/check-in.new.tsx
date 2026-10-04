@@ -6,6 +6,7 @@ import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
+import { Button } from '@/components/ui/button'
 import { useCheckInNew, useClinicSettings } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
 
@@ -28,8 +29,9 @@ function CheckInNew() {
   const checkIn = useCheckInNew()
   const [saving, setSaving] = useState(false)
   const form = useChargeForm()
-  const { settings, isLoading: settingsLoading } = useClinicSettings()
+  const { settings, data: loadedSettings, isLoading: settingsLoading, refetch: reloadSettings } = useClinicSettings()
   const fee = settings.newPatientFee
+  const feeMissing = !settingsLoading && !loadedSettings
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -81,7 +83,7 @@ function CheckInNew() {
       title="حجز مريض جديد"
       description="أول مرة — سجّل بياناته والكشف"
       submitLabel={saving ? 'جاري التسجيل...' : 'تسجيل المريض'}
-      submitDisabled={saving || settingsLoading}
+      submitDisabled={saving || settingsLoading || feeMissing}
       onSubmit={submit}
       wide
       gridClassName="lg:grid-rows-[auto_1fr]"
@@ -110,15 +112,27 @@ function CheckInNew() {
           <input className={inputClass} name="address" required placeholder="المنطقة والعنوان" />
         </Field>
 
-        <div className="flex items-center gap-2.5 rounded-xl border border-success/25 bg-success/5 px-3 py-2.5 sm:col-span-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
-            <Check className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">الكشف {money(fee)}</p>
-            <p className="text-[11px] text-muted-foreground">هيتسجل إنه دفع الكشف</p>
+        {feeMissing ? (
+          <div className="flex items-center gap-2.5 rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 sm:col-span-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-destructive">تعذر تحميل سعر الكشف</p>
+              <p className="text-[11px] text-muted-foreground">مش هينفع التسجيل غير لما السعر يتحمّل</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-xl" onClick={() => void reloadSettings()}>
+              حاول تاني
+            </Button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2.5 rounded-xl border border-success/25 bg-success/5 px-3 py-2.5 sm:col-span-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
+              <Check className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{settingsLoading ? 'جاري تحميل سعر الكشف...' : `الكشف ${money(fee)}`}</p>
+              <p className="text-[11px] text-muted-foreground">هيتسجل إنه دفع الكشف</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <ChargeFields

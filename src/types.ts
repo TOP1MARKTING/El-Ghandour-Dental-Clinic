@@ -92,16 +92,6 @@ export type Expense = {
   createdAt: number
 }
 
-export type Appointment = {
-  id: string
-  patient: string
-  phone: string
-  reason: string
-  order: number
-  arrivedAt: string
-  status: 'في الانتظار' | 'عند الدكتور' | 'تم الكشف' | 'ملغي'
-}
-
 export type QueueStatus = 'في الانتظار' | 'عند الدكتور' | 'بانتظار الحساب' | 'تم الكشف' | 'ملغي'
 
 export type QueueEntry = {

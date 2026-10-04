@@ -12,31 +12,20 @@ import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
 import { Button } from '@/components/ui/button'
 import { splitReasons } from '@/components/clinic/reason-select'
 import { useCheckInFollowup, useCreateAppointment, usePatient, useUpdateAppointmentStatus } from '@/lib/clinic-hooks'
-import { dayKey } from '@/lib/format'
+import { ALREADY_HERE_ERROR } from '@/lib/clinic-api'
+import { addDays, dayKey, formatArabicWeekday, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ClinicAppointment } from '@/types'
 
-function addDays(days: number) {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  return dayKey(d)
-}
-
-export function parseDayKey(key: string) {
-  const [y = 0, m = 1, d = 1] = key.split('-').map(Number)
-  return new Date(y, m - 1, d)
+function keyAfter(days: number) {
+  return dayKey(addDays(new Date(), days))
 }
 
 /** النهاردة / بكرة / السبت 3 أكتوبر */
 export function formatAppointmentDay(key: string) {
   if (key === dayKey()) return 'النهاردة'
-  if (key === addDays(1)) return 'بكرة'
-  return parseDayKey(key).toLocaleDateString('ar-EG', {
-    numberingSystem: 'latn',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  if (key === keyAfter(1)) return 'بكرة'
+  return formatArabicWeekday(parseDayKey(key))
 }
 
 export function daysFromToday(key: string) {
@@ -54,7 +43,7 @@ export function daysUntilLabel(key: string) {
 /** النهاردة / امبارح / الأحد 27 سبتمبر */
 function formatPastDay(key: string) {
   if (key === dayKey()) return 'النهاردة'
-  if (key === addDays(-1)) return 'امبارح'
+  if (key === keyAfter(-1)) return 'امبارح'
   return formatAppointmentDay(key)
 }
 
@@ -79,7 +68,7 @@ export function AppointmentDateField({ date, setDate }: { date: string; setDate:
     <div className="grid gap-2">
       <div className="flex flex-wrap gap-1.5">
         {QUICK_DAYS.map(({ label, days }) => {
-          const value = addDays(days)
+          const value = keyAfter(days)
           const active = date === value
           return (
             <button
@@ -283,8 +272,12 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
 
   const arrived = async () => {
     try {
-      await checkIn.mutateAsync({ patientId: a.patientId })
-      await update.mutateAsync({ id: a.id, status: 'arrived' })
+      try {
+        await checkIn.mutateAsync({ patientId: a.patientId })
+      } catch (err) {
+        if (!(err instanceof Error && err.message === ALREADY_HERE_ERROR)) throw err
+        await update.mutateAsync({ id: a.id, status: 'arrived' })
+      }
       toast.success(`${a.patientName} اتسجل إنه جه ✅`)
       void nav({ to: '/' })
     } catch (err) {
@@ -297,8 +290,8 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
     try {
       await update.mutateAsync({ id: a.id, status: 'cancelled' })
       toast.success('اتلغى الموعد')
-    } catch {
-      toast.error('حصل خطأ أثناء الإلغاء')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الإلغاء'))
     }
   }
 

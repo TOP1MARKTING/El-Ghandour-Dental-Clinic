@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, areaClass, inputClass } from '@/components/clinic/form-layout'
 import { ReasonSelect } from '@/components/clinic/reason-select'
@@ -43,8 +44,8 @@ function AddPatient() {
       })
       toast.success('تم إضافة المريض بنجاح ✅')
       void nav({ to: '/patients/$patientId', params: { patientId: id } })
-    } catch {
-      toast.error('حصل خطأ أثناء الحفظ')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     } finally {
       setSaving(false)
     }

@@ -48,6 +48,12 @@ export function roleLabel(role: StaffRole) {
   return role === 'admin' ? 'أدمن العيادة' : 'مساعد الحجز'
 }
 
+/** بيانات قديمة اتسجل فيها الإيميل بدل الاسم */
+export function actorLabel(by: string) {
+  if (!by.includes('@')) return by
+  return by.trim().toLowerCase() === ADMIN_EMAIL ? 'د. أشرف الغندور' : 'الاستقبال'
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ClinicUser | null>(null)
   const [loading, setLoading] = useState(true)

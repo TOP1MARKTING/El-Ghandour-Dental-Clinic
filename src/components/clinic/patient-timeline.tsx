@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { CalendarCheck, CalendarPlus, CalendarX, CheckCircle2, ChevronDown, Stethoscope, UserPlus, Wallet } from 'lucide-react'
-import { parseDayKey } from '@/components/clinic/appointments'
 import { splitReasons } from '@/components/clinic/reason-select'
+import { actorLabel } from '@/lib/auth-context'
 import { usePatientAppointments, usePatientPayments, usePatientVisits } from '@/lib/clinic-hooks'
-import { dayKey, formatArabicWeekday, money } from '@/lib/format'
+import { formatArabicWeekday, groupByDay, money, parseDayKey, timeLabel } from '@/lib/format'
 import { NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
 import { cn } from '@/lib/utils'
 import type { ClinicAppointment, Patient, Payment, Visit } from '@/types'
@@ -58,11 +58,11 @@ export function PatientTimeline({ patient, limit = 0 }: { patient: Patient; limi
 
   return (
     <div className="grid gap-3">
-      {groupByDay(shown).map((group) => (
+      {groupByDay(shown, (e) => e.at, (e) => e.fallbackDate ?? '').map((group) => (
         <section key={group.key}>
           <p className="mb-1.5 text-xs font-bold text-muted-foreground">{group.label}</p>
           <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
-            {group.events.map((e) => (
+            {group.items.map((e) => (
               <li key={e.id} className={cn('flex items-center gap-3 px-3 py-2', e.highlight && 'bg-success/5')}>
                 <span className={cn('grid size-8 shrink-0 place-items-center rounded-full', e.tone)}>{e.icon}</span>
                 <div className="min-w-0 flex-1">
@@ -102,46 +102,8 @@ export function PatientTimeline({ patient, limit = 0 }: { patient: Patient; limi
   )
 }
 
-/** بيانات قديمة اتسجل فيها الإيميل بدل الاسم */
-export function actorLabel(by: string) {
-  if (!by.includes('@')) return by
-  return by.trim().toLowerCase() === 'admin@elghandour.com' ? 'د. أشرف الغندور' : 'الاستقبال'
-}
-
-function groupByDay(events: TimelineEvent[]) {
-  const today = dayKey()
-  const yesterday = dayKey(new Date(Date.now() - 864e5))
-  const groups: { key: string; label: string; events: TimelineEvent[] }[] = []
-  for (const e of events) {
-    const key = e.at ? dayKey(new Date(e.at)) : e.fallbackDate || '—'
-    let group = groups.find((g) => g.key === key)
-    if (!group) {
-      const label =
-        key === today ? 'النهاردة' : key === yesterday ? 'امبارح' : e.at ? formatArabicWeekday(new Date(e.at)) : key
-      group = { key, label, events: [] }
-      groups.push(group)
-    }
-    group.events.push(e)
-  }
-  return groups
-}
-
-function timeLabel(ms: number) {
-  return new Date(ms).toLocaleTimeString('ar-EG', {
-    numberingSystem: 'latn',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
-
 function dayLabel(key: string) {
-  return parseDayKey(key).toLocaleDateString('ar-EG', {
-    numberingSystem: 'latn',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
+  return formatArabicWeekday(parseDayKey(key))
 }
 
 function buildEvents(

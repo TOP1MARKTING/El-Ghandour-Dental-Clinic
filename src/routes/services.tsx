@@ -15,7 +15,7 @@ import {
   useServices,
   useUpdateServicePrice,
 } from '@/lib/clinic-hooks'
-import { errorText } from '@/lib/api-errors'
+import { apiErrorMessage, errorText } from '@/lib/api-errors'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { DEFAULT_SERVICES, groupByFirstWord, subServiceName } from '@/lib/visit-reasons'
@@ -59,11 +59,7 @@ function Services() {
   const importDefaults = async () => {
     setImporting(true)
     try {
-      const existing = new Set(services.map((s) => s.name))
-      for (const s of DEFAULT_SERVICES) {
-        if (existing.has(s.name)) continue
-        await create.mutateAsync({ name: s.name, price: s.price })
-      }
+      await create.mutateAsync(DEFAULT_SERVICES.map((s) => ({ name: s.name, price: s.price })))
       toast.success('اتضافت خدمات العيادة — كمّل الأسعار الفاضية')
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء الإضافة'))
@@ -202,7 +198,20 @@ function ServiceGroups({ services }: { services: Service[] }) {
 }
 
 function NewPatientFeeCard() {
-  const { settings, isLoading, dataUpdatedAt } = useClinicSettings()
+  const { settings, isLoading, isError, isFetching, error, dataUpdatedAt, refetch } = useClinicSettings()
+  if (isError && !isFetching) {
+    return (
+      <div className="surface-ink flex items-center gap-3 rounded-2xl p-3 text-white shadow-clinic">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-bold">سعر الكشف</h2>
+          <p className="truncate text-xs text-white/75">تعذر تحميل السعر — {apiErrorMessage(error)}</p>
+        </div>
+        <Button type="button" variant="secondary" className="h-11 shrink-0 rounded-xl px-4" onClick={() => void refetch()}>
+          حاول تاني
+        </Button>
+      </div>
+    )
+  }
   return (
     <NewPatientFeeForm
       key={isLoading ? 'loading' : dataUpdatedAt}

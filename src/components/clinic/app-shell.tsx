@@ -88,11 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (login) return <>{children}</>
   if (loading || !user) return <BootScreen />
 
-  const formPage =
-    path.endsWith('/new') ||
-    path.includes('/visits/new') ||
-    path.startsWith('/check-in/') ||
-    path.includes('/bill')
+  const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
   const listPage = path === '/' || path === '/patients' || path === '/payments' || path === '/finance'
   const fitHeight = formPage || listPage
   const initial = user.name.trim().charAt(0) || 'د'

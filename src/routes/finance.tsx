@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ArabicDatePicker, parseDayKey } from '@/components/clinic/appointments'
+import { ArabicDatePicker } from '@/components/clinic/appointments'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import type { PaymentKind } from '@/types'
 import { FormEvent, useMemo, useState, type ReactNode } from 'react'
 import { Clock3, PiggyBank, Plus, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
-import { dayTitle, KindFilterTabs, PaymentList, timeLabel, type KindFilter } from '@/components/clinic/payment-list'
+import { KindFilterTabs, PaymentList, type KindFilter } from '@/components/clinic/payment-list'
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
 import { PageSurface } from '@/components/clinic/app-shell'
@@ -12,8 +12,26 @@ import { AdminOnly } from '@/components/clinic/admin-only'
 import { inputClass } from '@/components/clinic/form-layout'
 import { EmptyState, Field, LoadingSkeleton } from '@/components/clinic/ui'
 import { Button } from '@/components/ui/button'
-import { useClinicSettings, useCreateExpense, useDeleteExpense, useFinance, usePatients } from '@/lib/clinic-hooks'
-import { dayKey, money, startOfDay, startOfMonth, startOfWeek, withWeekday } from '@/lib/format'
+import {
+  useClinicSettings,
+  useCreateExpense,
+  useDeleteExpense,
+  useFinance,
+  useOutstandingTotal,
+  useTodayKey,
+} from '@/lib/clinic-hooks'
+import {
+  addDays,
+  dayKey,
+  money,
+  parseDayKey,
+  relativeDayLabel,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  timeLabel,
+  withWeekday,
+} from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/finance')({
@@ -85,21 +103,24 @@ function StatCard({
 
 function Finance() {
   const [period, setPeriod] = useState<PeriodId>('day')
-  const [customDay, setCustomDay] = useState(() => dayKey())
+  const todayKey = useTodayKey()
+  const [customDay, setCustomDay] = useState(todayKey)
   const starts = useMemo(() => {
-    const now = new Date()
+    const now = parseDayKey(todayKey)
     return Object.fromEntries(PERIODS.map((p) => [p.id, p.start(now).getTime()])) as Record<
       (typeof PERIODS)[number]['id'],
       number
     >
-  }, [])
-  const since = Math.min(starts.week, starts.month)
+  }, [todayKey])
   const customStart = parseDayKey(customDay).getTime()
-  const customEnd = customStart + 24 * 60 * 60 * 1000
+  const customEnd = addDays(parseDayKey(customDay), 1).getTime()
 
   const custom = period === 'custom'
-  const { data, isLoading, isError, refetch } = useFinance(custom ? customStart : since, custom ? customEnd : undefined)
-  const { data: patients = [] } = usePatients()
+  const { data, isLoading, isError, refetch } = useFinance(
+    custom ? customStart : starts[period],
+    custom ? customEnd : undefined,
+  )
+  const { data: outstanding = 0 } = useOutstandingTotal()
 
   const stats = useMemo(() => {
     const from = period === 'custom' ? customStart : starts[period]
@@ -125,14 +146,13 @@ function Finance() {
     }
   }, [data, period, starts, customStart])
 
-  const outstanding = patients.reduce((s, p) => s + Math.max(0, p.total - p.paid), 0)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const shownPayments = kindFilter === 'all' ? stats.payments : stats.payments.filter((p) => p.kind === kindFilter)
   const periodLabel =
     period === 'custom'
-      ? customDay === dayKey()
+      ? customDay === todayKey
         ? 'النهاردة'
-        : `يوم ${dayTitle(customStart)}`
+        : `يوم ${relativeDayLabel(customStart)}`
       : period === 'day'
         ? 'النهاردة'
         : period === 'week'
@@ -256,7 +276,7 @@ function Finance() {
                       category={x.category}
                       amount={x.amount}
                       note={x.note}
-                      when={period === 'day' || period === 'custom' ? timeLabel(x.spentAt) : withWeekday(x.date, x.spentAt) || dayTitle(x.spentAt)}
+                      when={period === 'day' || period === 'custom' ? timeLabel(x.spentAt) : withWeekday(x.date, x.spentAt) || relativeDayLabel(x.spentAt)}
                     />
                   ))}
                 </ul>
@@ -283,8 +303,7 @@ function AddExpense() {
     const formEl = e.currentTarget
     const data = new FormData(formEl)
     const dateStr = date || today
-    const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number)
-    const spentAt = dateStr === today ? new Date() : new Date(y, m - 1, d, 12)
+    const spentAt = dateStr === today ? new Date() : new Date(parseDayKey(dateStr).setHours(12))
     try {
       await create.mutateAsync({
         category,

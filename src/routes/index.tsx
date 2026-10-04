@@ -6,8 +6,8 @@ import { EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { Button } from '@/components/ui/button'
 import { FollowupIcon, NewPatientIcon, ToothIcon } from '@/components/clinic/dental-icons'
 import { useAuth } from '@/lib/auth-context'
-import { useFinance, useIsAdmin, useTodayQueue, useUpcomingAppointments } from '@/lib/clinic-hooks'
-import { dayKey, formatArabicWeekday, money, startOfDay } from '@/lib/format'
+import { useIsAdmin, usePayments, useTodayKey, useTodayQueue, useUpcomingAppointments } from '@/lib/clinic-hooks'
+import { formatArabicWeekday, money, parseDayKey } from '@/lib/format'
 import { AppointmentForm, AppointmentRow, formatAppointmentDay } from '@/components/clinic/appointments'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api-errors'
@@ -43,7 +43,7 @@ function useTodayVisitors() {
 
 function useTodayAppointments() {
   const { data: appointments = [] } = useUpcomingAppointments()
-  const todayKey = dayKey()
+  const todayKey = useTodayKey()
   return appointments.filter((a) => a.date === todayKey && a.status === 'upcoming')
 }
 
@@ -89,15 +89,12 @@ function BookingActions() {
 
 function DoctorHome() {
   const { visitors } = useTodayVisitors()
-  const [todayStart] = useState(() => startOfDay().getTime())
-  const { data: finance, isLoading: financeLoading } = useFinance(todayStart)
-  const payments = finance?.payments ?? []
+  const todayKey = useTodayKey()
+  const { data: payments = [], isLoading: financeLoading } = usePayments(parseDayKey(todayKey).getTime())
   const income = payments.reduce((s, p) => s + p.amount, 0)
   const todayAppointments = useTodayAppointments()
   const { data: allAppointments = [] } = useUpcomingAppointments()
-  const nextAppointments = allAppointments
-    .filter((a) => a.status === 'upcoming' && a.date > dayKey())
-    .slice(0, 3)
+  const nextAppointment = allAppointments.find((a) => a.status === 'upcoming' && a.date > todayKey)
 
   const newCount = visitors.filter((v) => v.kind === 'new').length
 
@@ -127,8 +124,8 @@ function DoctorHome() {
           label="مواعيد النهاردة"
           value={`${todayAppointments.length}`}
           sub={
-            nextAppointments[0]
-              ? `الجاي: ${formatAppointmentDay(nextAppointments[0].date)}`
+            nextAppointment
+              ? `الجاي: ${formatAppointmentDay(nextAppointment.date)}`
               : 'مفيش مواعيد جاية'
           }
         />

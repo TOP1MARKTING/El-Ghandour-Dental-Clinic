@@ -24,8 +24,6 @@ import { Route as PatientsNewRouteImport } from './routes/patients.new'
 import { Route as PaymentsIndexRouteImport } from './routes/payments.index'
 import { Route as PaymentsNewRouteImport } from './routes/payments.new'
 import { Route as PatientsPatientIdIndexRouteImport } from './routes/patients.$patientId.index'
-import { Route as QueueQueueIdBillRouteImport } from './routes/queue.$queueId.bill'
-import { Route as PatientsPatientIdVisitsNewRouteImport } from './routes/patients.$patientId.visits.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -102,17 +100,6 @@ const PatientsPatientIdIndexRoute = PatientsPatientIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PatientsPatientIdRoute,
 } as any)
-const QueueQueueIdBillRoute = QueueQueueIdBillRouteImport.update({
-  id: '/queue/$queueId/bill',
-  path: '/queue/$queueId/bill',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PatientsPatientIdVisitsNewRoute =
-  PatientsPatientIdVisitsNewRouteImport.update({
-    id: '/visits/new',
-    path: '/visits/new',
-    getParentRoute: () => PatientsPatientIdRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -129,9 +116,7 @@ export interface FileRoutesByFullPath {
   '/payments/new': typeof PaymentsNewRoute
   '/patients/': typeof PatientsIndexRoute
   '/payments/': typeof PaymentsIndexRoute
-  '/queue/$queueId/bill': typeof QueueQueueIdBillRoute
   '/patients/$patientId/': typeof PatientsPatientIdIndexRoute
-  '/patients/$patientId/visits/new': typeof PatientsPatientIdVisitsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -145,9 +130,7 @@ export interface FileRoutesByTo {
   '/payments/new': typeof PaymentsNewRoute
   '/patients': typeof PatientsIndexRoute
   '/payments': typeof PaymentsIndexRoute
-  '/queue/$queueId/bill': typeof QueueQueueIdBillRoute
   '/patients/$patientId': typeof PatientsPatientIdIndexRoute
-  '/patients/$patientId/visits/new': typeof PatientsPatientIdVisitsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -165,9 +148,7 @@ export interface FileRoutesById {
   '/payments/new': typeof PaymentsNewRoute
   '/patients/': typeof PatientsIndexRoute
   '/payments/': typeof PaymentsIndexRoute
-  '/queue/$queueId/bill': typeof QueueQueueIdBillRoute
   '/patients/$patientId/': typeof PatientsPatientIdIndexRoute
-  '/patients/$patientId/visits/new': typeof PatientsPatientIdVisitsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -186,9 +167,7 @@ export interface FileRouteTypes {
     | '/payments/new'
     | '/patients/'
     | '/payments/'
-    | '/queue/$queueId/bill'
     | '/patients/$patientId/'
-    | '/patients/$patientId/visits/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -202,9 +181,7 @@ export interface FileRouteTypes {
     | '/payments/new'
     | '/patients'
     | '/payments'
-    | '/queue/$queueId/bill'
     | '/patients/$patientId'
-    | '/patients/$patientId/visits/new'
   id:
     | '__root__'
     | '/'
@@ -221,9 +198,7 @@ export interface FileRouteTypes {
     | '/payments/new'
     | '/patients/'
     | '/payments/'
-    | '/queue/$queueId/bill'
     | '/patients/$patientId/'
-    | '/patients/$patientId/visits/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -236,7 +211,6 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRoute
   CheckInFollowupRoute: typeof CheckInFollowupRoute
   CheckInNewRoute: typeof CheckInNewRoute
-  QueueQueueIdBillRoute: typeof QueueQueueIdBillRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -346,31 +320,15 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PatientsPatientIdIndexRouteImport
       parentRoute: typeof PatientsPatientIdRoute
     }
-    '/queue/$queueId/bill': {
-      id: '/queue/$queueId/bill'
-      path: '/queue/$queueId/bill'
-      fullPath: '/queue/$queueId/bill'
-      preLoaderRoute: typeof QueueQueueIdBillRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/patients/$patientId/visits/new': {
-      id: '/patients/$patientId/visits/new'
-      path: '/visits/new'
-      fullPath: '/patients/$patientId/visits/new'
-      preLoaderRoute: typeof PatientsPatientIdVisitsNewRouteImport
-      parentRoute: typeof PatientsPatientIdRoute
-    }
   }
 }
 
 interface PatientsPatientIdRouteChildren {
   PatientsPatientIdIndexRoute: typeof PatientsPatientIdIndexRoute
-  PatientsPatientIdVisitsNewRoute: typeof PatientsPatientIdVisitsNewRoute
 }
 
 const PatientsPatientIdRouteChildren: PatientsPatientIdRouteChildren = {
   PatientsPatientIdIndexRoute: PatientsPatientIdIndexRoute,
-  PatientsPatientIdVisitsNewRoute: PatientsPatientIdVisitsNewRoute,
 }
 
 const PatientsPatientIdRouteWithChildren =
@@ -416,7 +374,6 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRoute,
   CheckInFollowupRoute: CheckInFollowupRoute,
   CheckInNewRoute: CheckInNewRoute,
-  QueueQueueIdBillRoute: QueueQueueIdBillRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

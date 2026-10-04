@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-import { LoaderCircle, Search, TriangleAlert, Users } from 'lucide-react'
+import { LoaderCircle, Search, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 
 export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
@@ -62,86 +61,15 @@ export function SearchBar({
   )
 }
 
-export function FinancialCard({
-  label,
-  value,
-  tone = 'default',
-  compact = false,
-}: {
-  label: string
-  value: string
-  tone?: 'default' | 'good' | 'warn'
-  compact?: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        'relative overflow-hidden rounded-2xl border shadow-clinic',
-        compact ? 'px-3.5 py-3 sm:px-4' : 'p-4 sm:p-5',
-        tone === 'good' && 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
-        tone === 'warn' && 'border-amber-200 bg-gradient-to-br from-amber-50 to-white',
-        tone === 'default' && 'border-blue-200 bg-gradient-to-br from-blue-50 to-white',
-      )}
-    >
-      <span
-        className={cn(
-          'absolute inset-y-0 right-0 w-1',
-          tone === 'good' && 'bg-success',
-          tone === 'warn' && 'bg-warning',
-          tone === 'default' && 'bg-primary',
-        )}
-      />
-      <p className="relative flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-        <span
-          className={cn(
-            'size-2 rounded-full',
-            tone === 'good' && 'bg-success',
-            tone === 'warn' && 'bg-warning',
-            tone === 'default' && 'bg-primary',
-          )}
-        />
-        {label}
-      </p>
-      <p
-        className={cn(
-          'font-display relative font-semibold',
-          compact ? 'mt-1 truncate text-lg sm:text-xl' : 'mt-2 text-xl sm:text-2xl',
-          tone === 'good' && 'text-success',
-          tone === 'warn' && 'text-warning',
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  )
-}
-
-export function StatusBadge({ status, label: labelOverride }: { status: string; label?: string }) {
-  const label = labelOverride ??
-    (status === 'بانتظار الحساب'
-      ? 'بانتظار الحساب'
-      : status === 'عند الدكتور'
-        ? 'بانتظار الحساب'
-        : status)
-
-  const cls =
-    status === 'تم الكشف' || status === 'تم الحضور'
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-      : status === 'ملغي' || status === 'لم يحضر'
-        ? 'bg-rose-50 text-rose-700 ring-rose-200'
-        : status === 'عند الدكتور' || status === 'بانتظار الحساب'
-          ? 'bg-blue-50 text-blue-700 ring-blue-200'
-          : 'bg-amber-50 text-amber-700 ring-amber-200'
-  return <span className={cn('inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1', cls)}>{label}</span>
-}
-
 export function EmptyState({
   title = 'لا توجد بيانات حتى الآن',
+  description,
   action,
   icon,
   className,
 }: {
   title?: string
+  description?: string
   action?: ReactNode
   icon?: ReactNode
   className?: string
@@ -153,20 +81,8 @@ export function EmptyState({
           {icon ?? <Users />}
         </div>
         <h3 className="mt-4 font-semibold">{title}</h3>
+        {description ? <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p> : null}
         {action && <div className="mt-4">{action}</div>}
-      </div>
-    </div>
-  )
-}
-
-export function ErrorState() {
-  return (
-    <div className="glass grid min-h-56 place-items-center rounded-2xl p-5 text-center sm:min-h-64 sm:p-8">
-      <div>
-        <TriangleAlert className="mx-auto size-10 text-destructive" />
-        <h3 className="mt-3 text-lg font-semibold">حصلت مشكلة</h3>
-        <p className="mt-1 text-sm text-muted-foreground">تعذر عرض البيانات الآن</p>
-        <Button className="mt-4">إعادة المحاولة</Button>
       </div>
     </div>
   )

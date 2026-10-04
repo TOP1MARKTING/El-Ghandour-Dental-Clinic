@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { errorText } from '@/lib/api-errors'
 import { money } from '@/lib/format'
+import { patientBalance } from '@/lib/pricing'
 import { useCreatePayment, usePatients } from '@/lib/clinic-hooks'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
@@ -40,7 +42,7 @@ function AddPayment() {
   }, [initialPatient])
 
   const selected = useMemo(() => patients.find((p) => p.id === patientId), [patients, patientId])
-  const remaining = selected ? selected.total - selected.paid : 0
+  const remaining = selected ? patientBalance(selected) : 0
   const knownPatient = Boolean(initialPatient && selected)
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
@@ -69,8 +71,8 @@ function AddPayment() {
       })
       toast.success('تم تسجيل الدفعة ✅')
       void nav({ to: '/patients/$patientId', params: { patientId } })
-    } catch {
-      toast.error('حصل خطأ أثناء الحفظ')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
     } finally {
       setSaving(false)
     }

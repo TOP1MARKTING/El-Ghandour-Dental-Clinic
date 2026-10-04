@@ -22,8 +22,6 @@ export const DEFAULT_SERVICES = [
 /** بتظهر لو لسه مفيش خدمات متسجلة */
 export const VISIT_REASONS = [...DEFAULT_SERVICES.map((s) => s.name), 'أخرى'] as const
 
-export type VisitReason = (typeof VISIT_REASONS)[number]
-
 export type ServiceGroup<T> = { key: string; items: T[] }
 
 /** الخدمات اللي بتبدأ بنفس الكلمة بتتجمع مع بعض: حشو، خلع، تركيبات... */

@@ -27,41 +27,6 @@ export function ToothIcon({ className, strokeWidth = 1.75 }: IconProps) {
   )
 }
 
-/** مرآة أسنان */
-export function DentalMirrorIcon({ className, strokeWidth = 1.75 }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={cn('size-5', className)} aria-hidden {...base} strokeWidth={strokeWidth}>
-      <circle cx="9.5" cy="8.5" r="4.2" />
-      <circle cx="9.5" cy="8.5" r="2" opacity="0.45" />
-      <path d="M12.8 11.8 20 21" />
-    </svg>
-  )
-}
-
-/** أداة حفر / هاندبيس مبسطة */
-export function DentalDrillIcon({ className, strokeWidth = 1.75 }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={cn('size-5', className)} aria-hidden {...base} strokeWidth={strokeWidth}>
-      <path d="M4 14.5c2.2-1.2 4.2-1.8 6.2-1.8h3.3c1.1 0 2 .9 2 2v.2c0 1.1-.9 2-2 2H11" />
-      <path d="M15.5 14.7h2.2c.9 0 1.6-.7 1.6-1.6V11c0-1.8-1.5-3.3-3.3-3.3h-1.4" />
-      <path d="M4 14.5v3.2" />
-      <path d="M3.2 18.8h1.6" />
-    </svg>
-  )
-}
-
-/** أشعة / بانوراما سن */
-export function DentalScanIcon({ className, strokeWidth = 1.75 }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" className={cn('size-5', className)} aria-hidden {...base} strokeWidth={strokeWidth}>
-      <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
-      <path d="M7.5 15.5c1-.8 2.1-1.2 3.2-1.2.9 0 1.7.3 2.4.8" />
-      <path d="M13.5 15.2c.8-.5 1.7-.7 2.7-.7.9 0 1.7.2 2.5.7" />
-      <path d="M8 11.2v.1M12 10.5v.1M16 11.2v.1" />
-    </svg>
-  )
-}
-
 /** ملف مريض بأسنان */
 export function PatientFileIcon({ className, strokeWidth = 1.75 }: IconProps) {
   return (

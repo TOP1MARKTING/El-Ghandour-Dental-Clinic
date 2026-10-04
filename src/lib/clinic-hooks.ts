@@ -13,7 +13,8 @@ import {
   deletePatient,
   deleteService,
   getPatient,
-  getQueueEntry,
+  getOutstandingTotal,
+  getPaymentsTotal,
   listFinanceSince,
   listPatientAppointments,
   listPatients,
@@ -23,17 +24,27 @@ import {
   listServices,
   listTodayQueue,
   listVisitsForPatient,
-  settleQueueBilling,
   subscribeTodayQueue,
   updateAppointmentStatus,
-  updateQueueStatus,
   updateServicePrice,
   getClinicSettings,
   saveClinicSettings,
 } from '@/lib/clinic-api'
 import { useAuth } from '@/lib/auth-context'
+import { addDays, dayKey, startOfDay } from '@/lib/format'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
-import type { AppointmentStatus, QueueStatus } from '@/types'
+import type { AppointmentStatus, QueueEntry } from '@/types'
+
+/** مفتاح النهاردة — بيتغير لوحده بعد نص الليل لو الصفحة فاضلة مفتوحة */
+export function useTodayKey() {
+  const [key, setKey] = useState(() => dayKey())
+  useEffect(() => {
+    const msToMidnight = addDays(startOfDay(), 1).getTime() - Date.now() + 1000
+    const timer = setTimeout(() => setKey(dayKey()), msToMidnight)
+    return () => clearTimeout(timer)
+  }, [key])
+  return key
+}
 
 function useClinicReady() {
   const { user, loading } = useAuth()
@@ -152,12 +163,39 @@ export function usePatientVisits(patientId: string) {
   return { ...query, isLoading: !ready || query.isLoading }
 }
 
-export function usePayments() {
+/** sinceMs: من أول الفترة — من غيره بيجيب كل الدفعات */
+export function usePayments(sinceMs?: number, enabled = true) {
   const ready = useClinicReady()
   const admin = useIsAdmin()
   const query = useQuery({
-    queryKey: ['payments'],
-    queryFn: listPayments,
+    queryKey: ['payments', 'list', sinceMs ?? 'all'],
+    queryFn: () => listPayments(sinceMs),
+    enabled: ready && admin && enabled,
+    retry: 1,
+  })
+  return { ...query, isLoading: !ready || query.isLoading }
+}
+
+/** مجموع كل الدفعات من أول ما العيادة اشتغلت — رقم واحد من السيرفر */
+export function usePaymentsTotal() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['payments', 'list', 'total'],
+    queryFn: getPaymentsTotal,
+    enabled: ready && admin,
+    retry: 1,
+  })
+  return { ...query, isLoading: !ready || query.isLoading }
+}
+
+/** الباقي عند المرضى كلهم — رقم واحد من السيرفر من غير ما نقرا كل المرضى */
+export function useOutstandingTotal() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['patients', 'outstanding'],
+    queryFn: getOutstandingTotal,
     enabled: ready && admin,
     retry: 1,
   })
@@ -179,29 +217,37 @@ export function useDeletePatient() {
   return useMutation({
     mutationFn: deletePatient,
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['patients'] })
-      await qc.invalidateQueries({ queryKey: ['payments'] })
-      await qc.invalidateQueries({ queryKey: ['finance'] })
-      await qc.invalidateQueries({ queryKey: ['visits'] })
+      await Promise.all(
+        ['patients', 'payments', 'finance', 'visits', 'appointments'].map((key) =>
+          qc.invalidateQueries({ queryKey: [key] }),
+        ),
+      )
     },
   })
 }
 
-/** تحديث القوايم في الخلفية — الحفظ نفسه ما يستناش إعادة التحميل */
-function refreshClinicData(qc: QueryClient) {
-  void qc.invalidateQueries({ queryKey: ['patients'] })
-  void qc.invalidateQueries({ queryKey: ['visits'] })
-  void qc.invalidateQueries({ queryKey: ['payments'] })
+/** تحديث بيانات المريض اللي اتعدّل بس — قايمة المرضى بتتعلّم قديمة وتتحمّل لما حد يفتحها */
+function refreshClinicData(qc: QueryClient, patientId?: string) {
+  if (patientId) {
+    void qc.invalidateQueries({ queryKey: ['patients'], exact: true, refetchType: 'none' })
+    void qc.invalidateQueries({ queryKey: ['patients', patientId] })
+    void qc.invalidateQueries({ queryKey: ['visits', patientId] })
+    void qc.invalidateQueries({ queryKey: ['payments', 'patient', patientId] })
+    void qc.invalidateQueries({ queryKey: ['appointments', 'patient', patientId] })
+  } else {
+    void qc.invalidateQueries({ queryKey: ['patients'] })
+  }
+  void qc.invalidateQueries({ queryKey: ['patients', 'outstanding'] })
+  void qc.invalidateQueries({ queryKey: ['payments', 'list'] })
   void qc.invalidateQueries({ queryKey: ['finance'] })
-  // زيارات النهاردة متوصلة لايف
-  void qc.invalidateQueries({ queryKey: ['queue'], predicate: (q) => q.queryKey[1] !== 'today' })
+  void qc.invalidateQueries({ queryKey: ['appointments', 'upcoming'] })
 }
 
 export function useCreateVisit() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createVisit,
-    onSuccess: () => refreshClinicData(qc),
+    onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
   })
 }
 
@@ -209,18 +255,55 @@ export function useCreatePayment() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createPayment,
-    onSuccess: () => refreshClinicData(qc),
+    onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
   })
+}
+
+/** اشتراك لايف واحد لدور النهاردة مهما كان عدد الصفحات اللي بتعرضه — بيفضل شغال دقيقة بعد آخر صفحة */
+const queueLive = {
+  key: '',
+  unsub: undefined as (() => void) | undefined,
+  users: new Set<(err: Error | null) => void>(),
+  stopTimer: undefined as ReturnType<typeof setTimeout> | undefined,
+}
+
+function watchTodayQueue(qc: QueryClient, key: string, onStatus: (err: Error | null) => void) {
+  clearTimeout(queueLive.stopTimer)
+  if (queueLive.key !== key || !queueLive.unsub) {
+    queueLive.unsub?.()
+    queueLive.key = key
+    queueLive.unsub = subscribeTodayQueue(
+      key,
+      (queue: QueueEntry[]) => {
+        qc.setQueryData(['queue', 'today', key], queue)
+        queueLive.users.forEach((notify) => notify(null))
+      },
+      (err) => {
+        queueLive.unsub = undefined
+        queueLive.users.forEach((notify) => notify(err))
+      },
+    )
+  }
+  queueLive.users.add(onStatus)
+  return () => {
+    queueLive.users.delete(onStatus)
+    if (queueLive.users.size > 0) return
+    queueLive.stopTimer = setTimeout(() => {
+      queueLive.unsub?.()
+      queueLive.unsub = undefined
+    }, 60_000)
+  }
 }
 
 export function useTodayQueue() {
   const ready = useClinicReady()
   const qc = useQueryClient()
+  const key = useTodayKey()
   const [liveError, setLiveError] = useState<Error | null>(null)
   const [attempt, setAttempt] = useState(0)
   const query = useQuery({
-    queryKey: ['queue', 'today'],
-    queryFn: listTodayQueue,
+    queryKey: ['queue', 'today', key],
+    queryFn: () => listTodayQueue(key),
     enabled: ready,
     retry: 1,
     staleTime: Infinity,
@@ -229,14 +312,8 @@ export function useTodayQueue() {
   useEffect(() => {
     if (!ready) return
     setLiveError(null)
-    return subscribeTodayQueue(
-      (queue) => {
-        setLiveError(null)
-        qc.setQueryData(['queue', 'today'], queue)
-      },
-      setLiveError,
-    )
-  }, [ready, qc, attempt])
+    return watchTodayQueue(qc, key, setLiveError)
+  }, [ready, qc, key, attempt])
 
   const error = query.error ?? liveError
   return {
@@ -255,7 +332,7 @@ export function useCheckInNew() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: checkInNewPatient,
-    onSuccess: () => refreshClinicData(qc),
+    onSuccess: (result) => refreshClinicData(qc, result.patientId),
   })
 }
 
@@ -263,29 +340,8 @@ export function useCheckInFollowup() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: checkInFollowupPatient,
-    onSuccess: () => refreshClinicData(qc),
+    onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
   })
-}
-
-export function useUpdateQueueStatus() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: QueueStatus }) => updateQueueStatus(id, status),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['queue'] })
-    },
-  })
-}
-
-export function useQueueEntry(id: string) {
-  const ready = useClinicReady()
-  const query = useQuery({
-    queryKey: ['queue', id],
-    queryFn: () => getQueueEntry(id),
-    enabled: ready && Boolean(id),
-    retry: 1,
-  })
-  return { ...query, isLoading: !ready || query.isLoading }
 }
 
 export function usePatientPayments(patientId: string) {
@@ -301,9 +357,10 @@ export function usePatientPayments(patientId: string) {
 
 export function useUpcomingAppointments() {
   const ready = useClinicReady()
+  const key = useTodayKey()
   const query = useQuery({
-    queryKey: ['appointments', 'upcoming'],
-    queryFn: listUpcomingAppointments,
+    queryKey: ['appointments', 'upcoming', key],
+    queryFn: () => listUpcomingAppointments(key),
     enabled: ready,
     retry: 1,
     staleTime: 60_000,
@@ -362,13 +419,5 @@ export function useSaveClinicSettings() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['settings'] })
     },
-  })
-}
-
-export function useSettleQueueBilling() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: settleQueueBilling,
-    onSuccess: () => refreshClinicData(qc),
   })
 }
