@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
   const listPage = path === '/' || path === '/patients' || path === '/payments' || path === '/finance'
   const fitHeight = formPage || listPage
-  const initial = user.name.trim().charAt(0) || 'د'
+  const initial = user.name.replace(/^د\.\s*/, '').trim().charAt(0) || 'د'
   const pink = user.theme === 'pink'
   const bow = pink ? ' 🎀' : ''
   const avatarClass = cn(

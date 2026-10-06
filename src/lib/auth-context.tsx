@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 /** حسابات الأدمن واسم كل واحد — أي حساب تاني بيبقى استقبال. لازم تتطابق مع isAdmin في firestore.rules */
 const ADMINS: Record<string, string> = {
   'ashraf@elghandour.com': 'د. أشرف الغندور',
-  'heba@elghandour.com': 'هبة',
+  'heba@elghandour.com': 'د. هبة',
 }
 /** إيميلات اتغيرت بس لسه متسجلة على عمليات قديمة */
 const FORMER_ACCOUNTS: Record<string, string> = {
