@@ -32,13 +32,17 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** حساب الدكتور — أي حساب تاني بيبقى استقبال */
-const ADMIN_EMAIL = 'admin@elghandour.com'
+/** حسابات الأدمن واسم كل واحد — أي حساب تاني بيبقى استقبال. لازم تتطابق مع isAdmin في firestore.rules */
+const ADMINS: Record<string, string> = {
+  'admin@elghandour.com': 'د. أشرف الغندور',
+  'heba@elghandour.com': 'هبة',
+}
 const HELPER_EMAIL = 'helper@elghandour.com'
 
 function toClinicUser(user: User): ClinicUser {
   const email = (user.email ?? '').trim().toLowerCase()
-  if (email === ADMIN_EMAIL) return { uid: user.uid, email, name: 'د. أشرف الغندور', role: 'admin' }
+  const adminName = ADMINS[email]
+  if (adminName) return { uid: user.uid, email, name: adminName, role: 'admin' }
   const name =
     user.displayName?.trim() || (email === HELPER_EMAIL ? 'الاستقبال' : email.split('@')[0] || 'الاستقبال')
   return { uid: user.uid, email, name, role: 'helper' }
@@ -51,7 +55,7 @@ export function roleLabel(role: StaffRole) {
 /** بيانات قديمة اتسجل فيها الإيميل بدل الاسم */
 export function actorLabel(by: string) {
   if (!by.includes('@')) return by
-  return by.trim().toLowerCase() === ADMIN_EMAIL ? 'د. أشرف الغندور' : 'الاستقبال'
+  return ADMINS[by.trim().toLowerCase()] ?? 'الاستقبال'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
