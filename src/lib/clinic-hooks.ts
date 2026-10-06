@@ -29,6 +29,7 @@ import {
   updateServicePrice,
   getClinicSettings,
   saveClinicSettings,
+  setPatientDoctor,
 } from '@/lib/clinic-api'
 import { useAuth } from '@/lib/auth-context'
 import { addDays, dayKey, startOfDay } from '@/lib/format'
@@ -54,6 +55,11 @@ function useClinicReady() {
 export function useIsAdmin() {
   const { user } = useAuth()
   return user?.role === 'admin'
+}
+
+/** الدكتور اللي فاتح الحساب — undefined للاستقبال */
+export function useMyDoctor() {
+  return useAuth().user?.doctorId
 }
 
 export function useServices() {
@@ -222,6 +228,20 @@ export function useDeletePatient() {
           qc.invalidateQueries({ queryKey: [key] }),
         ),
       )
+    },
+  })
+}
+
+export function useSetPatientDoctor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: setPatientDoctor,
+    onSuccess: async (_, input) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['patients'] }),
+        qc.invalidateQueries({ queryKey: ['appointments'] }),
+        qc.invalidateQueries({ queryKey: ['patients', input.patientId] }),
+      ])
     },
   })
 }

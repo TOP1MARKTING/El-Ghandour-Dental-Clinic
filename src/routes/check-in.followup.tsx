@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { useCheckInFollowup, usePatients } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
+import { doctorById, type DoctorId } from '@/lib/doctors'
+import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
 import { cn } from '@/lib/utils'
 import type { Patient } from '@/types'
 
@@ -37,10 +39,12 @@ function CheckInFollowup() {
   const [oldPaid, setOldPaid] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [doctor, setDoctor] = useState<DoctorId | ''>('')
   const form = useChargeForm()
 
   const selected = useMemo(() => patients.find((p) => p.id === patientId) ?? null, [patients, patientId])
   const oldRemaining = selected ? patientBalance(selected) : 0
+  const selectedDoctor = selected?.doctor
 
   const toggleNew = (open: boolean) => {
     setShowNew(open)
@@ -56,6 +60,10 @@ function CheckInFollowup() {
     toggleNew(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId])
+
+  useEffect(() => {
+    setDoctor(selectedDoctor ?? '')
+  }, [patientId, selectedDoctor])
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -87,13 +95,19 @@ function CheckInFollowup() {
     try {
       await checkIn.mutateAsync({
         patientId,
+        ...(doctor ? { doctor } : {}),
         ...(reason ? { reason, isNewTreatment: true } : {}),
         ...(charge.base > 0
           ? { charge: { basePrice: charge.base, discountPercent: form.discount, paidToday: paidN } }
           : {}),
         ...(oldPaidN > 0 ? { oldPayment: oldPaidN } : {}),
       })
-      toast.success(oldPaidN > 0 ? `اتسجل إنه جه النهاردة ودفع ${money(oldPaidN)} ✅` : 'اتسجل إنه جه النهاردة ✅')
+      const withDoctor = doctor ? ` مع ${doctorById(doctor).short}` : ''
+      toast.success(
+        oldPaidN > 0
+          ? `اتسجل إنه جه النهاردة${withDoctor} ودفع ${money(oldPaidN)} ✅`
+          : `اتسجل إنه جه النهاردة${withDoctor} ✅`,
+      )
       void nav({ to: '/', replace: true })
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء التسجيل'))
@@ -121,6 +135,15 @@ function CheckInFollowup() {
         <>
           <div className="col-span-full grid content-start gap-2.5 lg:col-span-1">
             <PatientSummary patient={selected} remaining={oldRemaining} />
+            <Field
+              dense
+              label="هيدخل لمين النهاردة"
+              {...(doctor && doctor !== selected.doctor
+                ? { hint: `دكتوره المتابع ${doctorById(selected.doctor).short}` }
+                : {})}
+            >
+              <DoctorPicker value={doctor} onChange={setDoctor} />
+            </Field>
             <OldBalance oldPaid={oldPaid} setOldPaid={setOldPaid} remaining={oldRemaining} />
 
             <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
@@ -169,7 +192,8 @@ function PatientSummary({ patient: p, remaining }: { patient: Patient; remaining
   return (
     <section className="grid content-start gap-2.5 rounded-2xl border border-border/70 bg-muted/25 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <DoctorBadge id={p.doctor} />
           <CalendarClock className="size-3.5" />
           {p.lastVisit ? `آخر زيارة: ${p.lastVisit}` : 'أول مرة يتابع'}
         </p>

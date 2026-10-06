@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ar } from 'date-fns/locale'
 import { CalendarCheck, CalendarDays, Clock, FileText, Phone, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,6 +15,8 @@ import { useCheckInFollowup, useCreateAppointment, usePatient, useUpdateAppointm
 import { ALREADY_HERE_ERROR } from '@/lib/clinic-api'
 import { addDays, dayKey, formatArabicWeekday, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { doctorById, type DoctorId } from '@/lib/doctors'
+import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
 import type { ClinicAppointment } from '@/types'
 
 function keyAfter(days: number) {
@@ -171,6 +173,12 @@ export function AppointmentForm({
   const [patientId, setPatientId] = useState(fixedPatientId ?? '')
   const [date, setDate] = useState('')
   const [note, setNote] = useState('')
+  const [doctor, setDoctor] = useState<DoctorId | ''>('')
+  const patientDoctor = usePatient(patientId).data?.doctor
+
+  useEffect(() => {
+    setDoctor(patientDoctor ?? '')
+  }, [patientId, patientDoctor])
 
   const save = async () => {
     if (!patientId) {
@@ -182,8 +190,10 @@ export function AppointmentForm({
       return
     }
     try {
-      await create.mutateAsync({ patientId, date, time: '', note })
-      toast.success(`اتحجز الموعد — ${formatAppointmentDay(date)}`)
+      await create.mutateAsync({ patientId, date, time: '', note, ...(doctor ? { doctor } : {}) })
+      toast.success(
+        `اتحجز الموعد — ${formatAppointmentDay(date)}${doctor ? ` مع ${doctorById(doctor).short}` : ''}`,
+      )
       setDate('')
       setNote('')
       if (!fixedPatientId) setPatientId('')
@@ -200,6 +210,11 @@ export function AppointmentForm({
           <PatientSearchPicker value={patientId} onChange={setPatientId} />
         </Field>
       )}
+      {patientId ? (
+        <Field dense label="الموعد مع مين">
+          <DoctorPicker value={doctor} onChange={setDoctor} />
+        </Field>
+      ) : null}
       <div className="grid gap-1 text-sm font-semibold">
         يرجع إمتى
         <AppointmentDateField date={date} setDate={setDate} />
@@ -273,7 +288,7 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
   const arrived = async () => {
     try {
       try {
-        await checkIn.mutateAsync({ patientId: a.patientId })
+        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor })
       } catch (err) {
         if (!(err instanceof Error && err.message === ALREADY_HERE_ERROR)) throw err
         await update.mutateAsync({ id: a.id, status: 'arrived' })
@@ -323,6 +338,7 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
           >
             {a.patientName}
           </Link>
+          <DoctorBadge id={a.doctor} />
           {a.status === 'arrived' ? (
             <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">وصل</span>
           ) : a.status === 'cancelled' ? (

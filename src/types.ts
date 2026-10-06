@@ -1,3 +1,5 @@
+import type { DoctorId } from '@/lib/doctors'
+
 export type Patient = {
   id: string
   name: string
@@ -12,6 +14,8 @@ export type Patient = {
   paid: number
   createdAt?: number
   by?: string
+  /** الدكتور المتابع — الدكتورين يقدروا يشوفوا كل المرضى */
+  doctor: DoctorId
 }
 
 export type Payment = {
@@ -44,6 +48,7 @@ export type ClinicAppointment = {
   time: string
   note: string
   status: AppointmentStatus
+  doctor: DoctorId
   createdAt: number
   /** آخر تغيير في الحالة (وصل / اتلغى) */
   updatedAt?: number
@@ -101,6 +106,7 @@ export type QueueEntry = {
   phone: string
   reason: string
   kind: 'new' | 'followup'
+  doctor: DoctorId
   order: number
   arrivedAt: string
   dayKey: string

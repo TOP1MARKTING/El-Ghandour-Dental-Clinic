@@ -3,6 +3,7 @@ import { Search, UserRound, X } from 'lucide-react'
 import { usePatients } from '@/lib/clinic-hooks'
 import { cn } from '@/lib/utils'
 import { inputClass } from '@/components/clinic/form-layout'
+import { DoctorBadge } from '@/components/clinic/doctors'
 
 export function PatientSearchPicker({
   value,
@@ -45,7 +46,10 @@ export function PatientSearchPicker({
           {selected.name[0]}
         </span>
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-sm font-semibold">{selected.name}</p>
+          <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+            <span className="truncate">{selected.name}</span>
+            <DoctorBadge id={selected.doctor} />
+          </p>
           <p className="truncate text-[11px] text-muted-foreground">
             <span dir="ltr">{selected.phone}</span>
           </p>
@@ -121,6 +125,7 @@ export function PatientSearchPicker({
                           {patient.problem ? ` · ${patient.problem}` : ''}
                         </span>
                       </span>
+                      <DoctorBadge id={patient.doctor} />
                     </button>
                   </li>
                 ))}

@@ -25,8 +25,11 @@ import {
   usePatientAppointments,
   usePatientPayments,
   usePatientVisits,
+  useSetPatientDoctor,
   useTodayQueue,
 } from '@/lib/clinic-hooks'
+import { DOCTORS } from '@/lib/doctors'
+import { DoctorBadge } from '@/components/clinic/doctors'
 import {
   AppointmentForm,
   daysUntilLabel,
@@ -217,6 +220,7 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
             ) : null}
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground sm:gap-x-4 sm:text-sm">
+            <PatientDoctor patient={p} />
             {p.age ? (
               <span className="inline-flex items-center gap-1">
                 <UserRound className="size-3.5 text-primary" />
@@ -247,6 +251,37 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
         </div>
       </div>
     </section>
+  )
+}
+
+function PatientDoctor({ patient: p }: { patient: Patient }) {
+  const move = useSetPatientDoctor()
+  const other = DOCTORS.find((d) => d.id !== p.doctor)
+
+  const transfer = async () => {
+    if (!other || !window.confirm(`نقل ${p.name} لـ ${other.short}؟ مواعيده الجاية هتتنقل معاه`)) return
+    try {
+      await move.mutateAsync({ patientId: p.id, doctor: other.id })
+      toast.success(`${p.name} بقى مريض ${other.short}`)
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء النقل'))
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <DoctorBadge id={p.doctor} className="text-xs" />
+      {other ? (
+        <button
+          type="button"
+          onClick={() => void transfer()}
+          disabled={move.isPending}
+          className="rounded-lg px-1.5 py-0.5 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+        >
+          {move.isPending ? 'جاري النقل...' : `نقل لـ ${other.short}`}
+        </button>
+      ) : null}
+    </span>
   )
 }
 

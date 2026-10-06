@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth'
 import { getAuthClient } from '@/lib/backend'
 import { setActorName } from '@/lib/clinic-api'
+import { DOCTORS, doctorByEmail, type DoctorId } from '@/lib/doctors'
 import type { StaffRole } from '@/types'
 
 export type ClinicUser = {
@@ -22,6 +23,8 @@ export type ClinicUser = {
   name: string
   role: StaffRole
   theme?: 'pink'
+  /** لو الحساب بتاع دكتور — مرضاه بيظهروا عنده الأول */
+  doctorId?: DoctorId
 }
 
 type AuthContextValue = {
@@ -33,11 +36,8 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-/** حسابات الأدمن واسم كل واحد — أي حساب تاني بيبقى استقبال. لازم تتطابق مع isAdmin في firestore.rules */
-const ADMINS: Record<string, string> = {
-  'ashraf@elghandour.com': 'د. أشرف الغندور',
-  'heba@elghandour.com': 'د. هبة',
-}
+/** حسابات الأدمن هي حسابات الدكاترة — أي حساب تاني بيبقى استقبال */
+const ADMINS: Record<string, string> = Object.fromEntries(DOCTORS.map((d) => [d.email, d.name]))
 /** إيميلات اتغيرت بس لسه متسجلة على عمليات قديمة */
 const FORMER_ACCOUNTS: Record<string, string> = {
   'admin@elghandour.com': 'د. أشرف الغندور',
@@ -47,9 +47,16 @@ const PINK_ACCOUNTS = new Set(['heba@elghandour.com'])
 
 function toClinicUser(user: User): ClinicUser {
   const email = (user.email ?? '').trim().toLowerCase()
-  const adminName = ADMINS[email]
-  if (adminName) {
-    return { uid: user.uid, email, name: adminName, role: 'admin', ...(PINK_ACCOUNTS.has(email) ? { theme: 'pink' } : {}) }
+  const doctor = doctorByEmail(email)
+  if (doctor) {
+    return {
+      uid: user.uid,
+      email,
+      name: doctor.name,
+      role: 'admin',
+      doctorId: doctor.id,
+      ...(PINK_ACCOUNTS.has(email) ? { theme: 'pink' } : {}),
+    }
   }
   const name =
     user.displayName?.trim() || (email === HELPER_EMAIL ? 'الاستقبال' : email.split('@')[0] || 'الاستقبال')

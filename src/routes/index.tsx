@@ -6,7 +6,16 @@ import { EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { Button } from '@/components/ui/button'
 import { FollowupIcon, NewPatientIcon, ToothIcon } from '@/components/clinic/dental-icons'
 import { useAuth } from '@/lib/auth-context'
-import { useIsAdmin, usePayments, useTodayKey, useTodayQueue, useUpcomingAppointments } from '@/lib/clinic-hooks'
+import {
+  useIsAdmin,
+  useMyDoctor,
+  usePayments,
+  useTodayKey,
+  useTodayQueue,
+  useUpcomingAppointments,
+} from '@/lib/clinic-hooks'
+import { DOCTORS, mineFirst } from '@/lib/doctors'
+import { DoctorBadge } from '@/components/clinic/doctors'
 import { formatArabicWeekday, money, parseDayKey } from '@/lib/format'
 import { AppointmentForm, AppointmentRow, formatAppointmentDay } from '@/components/clinic/appointments'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -34,9 +43,15 @@ function Home() {
 
 function useTodayVisitors() {
   const query = useTodayQueue()
+  const myDoctor = useMyDoctor()
   const visitors = useMemo(
-    () => (query.data ?? []).filter((x) => x.status !== 'ملغي').sort((a, b) => b.order - a.order),
-    [query.data],
+    () =>
+      mineFirst(
+        (query.data ?? []).filter((x) => x.status !== 'ملغي').sort((a, b) => b.order - a.order),
+        (x) => x.doctor,
+        myDoctor,
+      ),
+    [query.data, myDoctor],
   )
   return { ...query, visitors }
 }
@@ -44,7 +59,12 @@ function useTodayVisitors() {
 function useTodayAppointments() {
   const { data: appointments = [] } = useUpcomingAppointments()
   const todayKey = useTodayKey()
-  return appointments.filter((a) => a.date === todayKey && a.status === 'upcoming')
+  const myDoctor = useMyDoctor()
+  return mineFirst(
+    appointments.filter((a) => a.date === todayKey && a.status === 'upcoming'),
+    (a) => a.doctor,
+    myDoctor,
+  )
 }
 
 function HomeHeader() {
@@ -97,7 +117,10 @@ function DoctorHome() {
   const { data: allAppointments = [] } = useUpcomingAppointments()
   const nextAppointment = allAppointments.find((a) => a.status === 'upcoming' && a.date > todayKey)
 
-  const newCount = visitors.filter((v) => v.kind === 'new').length
+  const myDoctor = useMyDoctor()
+  const mineCount = visitors.filter((v) => v.doctor === myDoctor).length
+  const other = DOCTORS.find((d) => d.id !== myDoctor)
+  const myAppointments = todayAppointments.filter((a) => a.doctor === myDoctor).length
 
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
@@ -109,7 +132,11 @@ function DoctorHome() {
           icon={<Users className="size-4" />}
           label="جم النهاردة"
           value={`${visitors.length} ${visitors.length === 1 ? 'مريض' : 'مرضى'}`}
-          sub={visitors.length ? `${newCount} جديد · ${visitors.length - newCount} متابعة` : 'لسه محدش جه'}
+          sub={
+            visitors.length
+              ? `${mineCount} مرضاك${other ? ` · ${visitors.length - mineCount} لـ ${other.short}` : ''}`
+              : 'لسه محدش جه'
+          }
         />
         <HomeStat
           tone="good"
@@ -125,9 +152,11 @@ function DoctorHome() {
           label="مواعيد النهاردة"
           value={`${todayAppointments.length}`}
           sub={
-            nextAppointment
-              ? `الجاي: ${formatAppointmentDay(nextAppointment.date)}`
-              : 'مفيش مواعيد جاية'
+            todayAppointments.length
+              ? `${myAppointments} ليك${other ? ` · ${todayAppointments.length - myAppointments} لـ ${other.short}` : ''}`
+              : nextAppointment
+                ? `الجاي: ${formatAppointmentDay(nextAppointment.date)}`
+                : 'مفيش مواعيد جاية'
           }
         />
       </div>
@@ -384,6 +413,7 @@ function VisitorRow({ item }: { item: QueueEntry }) {
           >
             {item.kind === 'new' ? 'جديد' : 'متابعة'}
           </span>
+          <DoctorBadge id={item.doctor} />
         </div>
         <p className="mt-0.5 truncate text-sm text-muted-foreground">
           جه الساعة {item.arrivedAt}

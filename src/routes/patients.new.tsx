@@ -6,7 +6,9 @@ import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, areaClass, inputClass } from '@/components/clinic/form-layout'
 import { ReasonSelect } from '@/components/clinic/reason-select'
-import { useCreatePatient } from '@/lib/clinic-hooks'
+import { useCreatePatient, useMyDoctor } from '@/lib/clinic-hooks'
+import type { DoctorId } from '@/lib/doctors'
+import { DoctorPicker } from '@/components/clinic/doctors'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/patients/new')({
@@ -27,10 +29,16 @@ function AddPatient() {
   const nav = useNavigate()
   const create = useCreatePatient()
   const [saving, setSaving] = useState(false)
+  const myDoctor = useMyDoctor()
+  const [doctor, setDoctor] = useState<DoctorId | ''>(myDoctor ?? '')
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (saving) return
+    if (!doctor) {
+      toast.error('اختار المريض تبع مين — د. أشرف ولا د. هبة')
+      return
+    }
     const data = new FormData(e.currentTarget)
     setSaving(true)
     try {
@@ -41,6 +49,7 @@ function AddPatient() {
         address: String(data.get('address') ?? ''),
         problem: String(data.get('problem') ?? ''),
         notes: String(data.get('notes') ?? ''),
+        doctor,
       })
       toast.success('تم إضافة المريض بنجاح ✅')
       void nav({ to: '/patients/$patientId', params: { patientId: id } })
@@ -64,6 +73,9 @@ function AddPatient() {
       gridClassName="lg:grid-rows-[auto_1fr]"
     >
       <div className="col-span-full grid content-start gap-2.5 sm:grid-cols-2 sm:gap-x-3 lg:col-span-1 lg:col-start-1 lg:row-start-1">
+        <Field dense label="مريض مين" className="sm:col-span-2">
+          <DoctorPicker value={doctor} onChange={setDoctor} />
+        </Field>
         <Field dense label="اسم المريض">
           <input className={inputClass} name="name" required autoFocus placeholder="الاسم بالكامل" />
         </Field>

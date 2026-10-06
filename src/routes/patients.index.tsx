@@ -2,7 +2,9 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { money } from '@/lib/format'
-import { usePatients } from '@/lib/clinic-hooks'
+import { useMyDoctor, usePatients } from '@/lib/clinic-hooks'
+import { doctorById, mineFirst } from '@/lib/doctors'
+import { DoctorBadge, DoctorFilter, type DoctorFilterValue } from '@/components/clinic/doctors'
 import { CLIENT_ONLY_ERROR } from '@/lib/backend'
 import { apiErrorMessage } from '@/lib/api-errors'
 import { patientBalance } from '@/lib/pricing'
@@ -33,10 +35,18 @@ function Patients() {
   const term = useDeferredValue(q.trim())
   const isMobile = useIsMobile()
   const { data: patients = [], isLoading, isError, error, refetch } = usePatients()
-  const matches = useMemo(
-    () => (term ? patients.filter((x) => x.name.includes(term) || x.phone.includes(term)) : patients),
-    [patients, term],
-  )
+  const myDoctor = useMyDoctor()
+  const [doctorFilter, setDoctorFilter] = useState<DoctorFilterValue>('all')
+  const counts = useMemo(() => {
+    const c: Partial<Record<DoctorFilterValue, number>> = { all: patients.length }
+    for (const p of patients) c[p.doctor] = (c[p.doctor] ?? 0) + 1
+    return c
+  }, [patients])
+  const matches = useMemo(() => {
+    const ofDoctor = doctorFilter === 'all' ? patients : patients.filter((x) => x.doctor === doctorFilter)
+    const found = term ? ofDoctor.filter((x) => x.name.includes(term) || x.phone.includes(term)) : ofDoctor
+    return mineFirst(found, (x) => x.doctor, myDoctor)
+  }, [patients, term, doctorFilter, myDoctor])
   const list = matches.slice(0, MAX_ROWS)
 
   const errorHint =
@@ -58,7 +68,12 @@ function Patients() {
           </Button>
         }
       />
-      <SearchBar value={q} onChange={setQ} placeholder="ابحث باسم المريض أو رقم الموبايل" />
+      <div className="grid gap-2 sm:flex sm:items-center">
+        <div className="min-w-0 flex-1">
+          <SearchBar value={q} onChange={setQ} placeholder="ابحث باسم المريض أو رقم الموبايل" />
+        </div>
+        <DoctorFilter value={doctorFilter} onChange={setDoctorFilter} counts={counts} className="sm:h-12 sm:items-center" />
+      </div>
 
       {isLoading ? (
         <div className="mt-3">
@@ -71,9 +86,15 @@ function Patients() {
       ) : list.length === 0 ? (
         <div className="mt-3">
           <EmptyState
-            title={q ? 'مفيش نتيجة للبحث' : 'لسه مفيش مرضى — أضف أول مريض'}
+            title={
+              q
+                ? 'مفيش نتيجة للبحث'
+                : doctorFilter !== 'all'
+                  ? `لسه مفيش مرضى لـ ${doctorById(doctorFilter).short}`
+                  : 'لسه مفيش مرضى — أضف أول مريض'
+            }
             action={
-              !q ? (
+              !q && doctorFilter === 'all' ? (
                 <Button asChild>
                   <Link to="/patients/new">إضافة مريض</Link>
                 </Button>
@@ -94,7 +115,7 @@ function Patients() {
               <table className="w-full text-right">
                 <thead className="sticky top-0 border-b border-border bg-muted text-sm text-muted-foreground">
                   <tr>
-                    {['اسم المريض', 'رقم الهاتف', 'السن', 'آخر زيارة', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
+                    {['اسم المريض', 'الدكتور', 'رقم الهاتف', 'السن', 'آخر زيارة', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
                       <th key={x} className="whitespace-nowrap px-3 py-2.5 font-semibold xl:px-4 xl:py-3">
                         {x}
                       </th>
@@ -105,6 +126,9 @@ function Patients() {
                   {list.map((x) => (
                     <tr key={x.id} className="border-b border-border/70 last:border-0">
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3 font-semibold">{x.name}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3">
+                        <DoctorBadge id={x.doctor} />
+                      </td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3" dir="ltr">
                         {x.phone}
                       </td>

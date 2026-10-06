@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { money } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
 import type { Patient } from '@/types'
+import { DoctorBadge } from '@/components/clinic/doctors'
 
 export function PatientCard({ patient }: { patient: Patient }) {
   const remaining = patientBalance(patient)
@@ -16,7 +17,10 @@ export function PatientCard({ patient }: { patient: Patient }) {
         {patient.name.trim().charAt(0) || <UserRound className="size-5" />}
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="truncate font-semibold">{patient.name}</h3>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="truncate font-semibold">{patient.name}</h3>
+          <DoctorBadge id={patient.doctor} />
+        </div>
         <p className="flex items-center gap-x-2 truncate text-xs text-muted-foreground">
           <span dir="ltr" className="inline-flex items-center gap-1">
             <Phone className="size-3" />

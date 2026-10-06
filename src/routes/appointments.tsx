@@ -13,7 +13,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api-errors'
-import { useUpcomingAppointments } from '@/lib/clinic-hooks'
+import { useMyDoctor, useUpcomingAppointments } from '@/lib/clinic-hooks'
+import { mineFirst } from '@/lib/doctors'
+import { DoctorFilter, type DoctorFilterValue } from '@/components/clinic/doctors'
 import { dayKey, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { ClinicAppointment } from '@/types'
@@ -35,6 +37,8 @@ export const Route = createFileRoute('/appointments')({
 function Appointments() {
   const { data: appointments = [], isLoading, isError, error, refetch } = useUpcomingAppointments()
   const [adding, setAdding] = useState(false)
+  const myDoctor = useMyDoctor()
+  const [doctorFilter, setDoctorFilter] = useState<DoctorFilterValue>('all')
 
   const groups = useMemo(() => {
     const today = dayKey()
@@ -42,14 +46,17 @@ function Appointments() {
     for (const a of appointments) {
       if (a.status === 'cancelled') continue
       if (a.status === 'arrived' && a.date !== today) continue
+      if (doctorFilter !== 'all' && a.doctor !== doctorFilter) continue
       const list = map.get(a.date) ?? []
       list.push(a)
       map.set(a.date, list)
     }
-    return [...map.entries()]
-  }, [appointments])
+    return [...map.entries()].map(([date, list]) => [date, mineFirst(list, (a) => a.doctor, myDoctor)] as const)
+  }, [appointments, doctorFilter, myDoctor])
 
-  const upcoming = appointments.filter((a) => a.status === 'upcoming')
+  const upcoming = appointments.filter(
+    (a) => a.status === 'upcoming' && (doctorFilter === 'all' || a.doctor === doctorFilter),
+  )
   const nearest = upcoming[0] ? (daysUntilLabel(upcoming[0].date) ?? formatAppointmentDay(upcoming[0].date)) : ''
   const summary = upcoming.length
     ? `${upcoming.length} ${upcoming.length === 1 ? 'موعد جاي' : 'مواعيد جاية'} · أقربهم ${nearest}`
@@ -77,6 +84,8 @@ function Appointments() {
           </Dialog>
         }
       />
+
+      <DoctorFilter value={doctorFilter} onChange={setDoctorFilter} className="mb-3 self-start max-sm:self-stretch" />
 
       <div className="min-h-0 flex-1 overflow-auto pe-1">
         {isLoading ? (

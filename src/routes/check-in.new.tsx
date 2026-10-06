@@ -7,8 +7,10 @@ import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { Button } from '@/components/ui/button'
-import { useCheckInNew, useClinicSettings } from '@/lib/clinic-hooks'
+import { useCheckInNew, useClinicSettings, useMyDoctor } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
+import { doctorById, type DoctorId } from '@/lib/doctors'
+import { DoctorPicker } from '@/components/clinic/doctors'
 
 export const Route = createFileRoute('/check-in/new')({
   head: () => ({
@@ -28,6 +30,8 @@ function CheckInNew() {
   const nav = useNavigate()
   const checkIn = useCheckInNew()
   const [saving, setSaving] = useState(false)
+  const myDoctor = useMyDoctor()
+  const [doctor, setDoctor] = useState<DoctorId | ''>(myDoctor ?? '')
   const form = useChargeForm()
   const { settings, data: loadedSettings, isLoading: settingsLoading, refetch: reloadSettings } = useClinicSettings()
   const fee = settings.newPatientFee
@@ -36,6 +40,10 @@ function CheckInNew() {
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (saving) return
+    if (!doctor) {
+      toast.error('اختار المريض هيدخل لمين — د. أشرف ولا د. هبة')
+      return
+    }
     const data = new FormData(e.currentTarget)
     const reason = form.treatment.trim()
     const { charge, paidN } = form
@@ -57,6 +65,7 @@ function CheckInNew() {
         address: String(data.get('address') ?? ''),
         feePrice: fee,
         feePaid: true,
+        doctor,
         ...(reason ? { reason } : {}),
         ...(charge.base > 0
           ? { charge: { basePrice: charge.base, discountPercent: form.discount, paidToday: paidN } }
@@ -65,8 +74,8 @@ function CheckInNew() {
       const owed = charge.base > 0 ? form.remaining : 0
       toast.success(
         owed > 0
-          ? `${name} اتسجل · لسه عليه ${money(owed)}`
-          : `${name} اتسجل ✅`,
+          ? `${name} اتسجل مع ${doctorById(doctor).short} · لسه عليه ${money(owed)}`
+          : `${name} اتسجل مع ${doctorById(doctor).short} ✅`,
       )
       void nav({ to: '/', replace: true })
     } catch (err) {
@@ -89,6 +98,10 @@ function CheckInNew() {
       gridClassName="lg:grid-rows-[auto_1fr]"
     >
       <div className="col-span-full grid content-start gap-2.5 sm:grid-cols-2 sm:gap-x-3 lg:col-span-1 lg:col-start-1 lg:row-start-1">
+        <Field dense label="هيدخل لمين" className="sm:col-span-2">
+          <DoctorPicker value={doctor} onChange={setDoctor} />
+        </Field>
+
         <Field dense label="اسم المريض">
           <input className={inputClass} name="name" required autoFocus placeholder="الاسم بالكامل" />
         </Field>

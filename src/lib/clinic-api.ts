@@ -23,6 +23,7 @@ import {
 import { getAuthClient, getDb } from '@/lib/backend'
 import { dayKey, formatArabicDate, formatArabicDateTime, formatClock, relativeDayLabel } from '@/lib/format'
 import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
+import { toDoctorId, type DoctorId } from '@/lib/doctors'
 import type {
   AppointmentStatus,
   ClinicAppointment,
@@ -86,6 +87,7 @@ function mapPatient(id: string, data: DocumentData): Patient {
     paid: Number(data['paid'] ?? 0),
     createdAt: Number(data['createdAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
+    doctor: toDoctorId(data['doctor']),
   }
 }
 
@@ -164,6 +166,7 @@ function mapQueue(id: string, data: DocumentData): QueueEntry {
     phone: String(data['phone'] ?? ''),
     reason: String(data['reason'] ?? ''),
     kind: data['kind'] === 'followup' ? 'followup' : 'new',
+    doctor: toDoctorId(data['doctor']),
     order: Number(data['order'] ?? 0),
     arrivedAt: String(data['arrivedAt'] ?? ''),
     dayKey: String(data['dayKey'] ?? ''),
@@ -194,12 +197,14 @@ export async function createPatient(input: {
   address?: string
   problem?: string
   notes?: string
+  doctor: DoctorId
 }) {
   const now = Date.now()
   const registeredAt = formatArabicDate()
   const ref = await addDoc(collection(getDb(), 'patients'), {
     name: input.name.trim(),
     phone: input.phone.trim(),
+    doctor: toDoctorId(input.doctor),
     age: input.age ?? 0,
     address: input.address?.trim() ?? '',
     problem: input.problem?.trim() ?? '',
@@ -213,6 +218,21 @@ export async function createPatient(input: {
     ...stamp(),
   })
   return ref.id
+}
+
+/** نقل المريض لدكتور تاني — المواعيد الجاية بتتنقل معاه */
+export async function setPatientDoctor(input: { patientId: string; doctor: DoctorId }) {
+  const db = getDb()
+  const doctor = toDoctorId(input.doctor)
+  const appointments = await getDocs(query(collection(db, 'appointments'), where('patientId', '==', input.patientId)))
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'patients', input.patientId), { doctor, ...touch() })
+  const today = dayKey()
+  for (const d of appointments.docs) {
+    const a = mapAppointment(d.id, d.data())
+    if (a.status === 'upcoming' && a.date >= today && a.doctor !== doctor) batch.update(d.ref, { doctor, ...touch() })
+  }
+  await batch.commit()
 }
 
 /** Firestore بيقبل 500 عملية بالكتير في الـ batch الواحد */
@@ -461,6 +481,7 @@ function queueDoc(input: {
   phone: string
   reason: string
   kind: 'new' | 'followup'
+  doctor: DoctorId
   order: number
   key: string
   now: number
@@ -472,6 +493,7 @@ function queueDoc(input: {
     phone: input.phone.trim(),
     reason: input.reason.trim() || (input.kind === 'new' ? 'كشف جديد' : 'متابعة'),
     kind: input.kind,
+    doctor: input.doctor,
     order: input.order,
     arrivedAt: formatClock(),
     dayKey: input.key,
@@ -499,11 +521,13 @@ export async function checkInNewPatient(input: {
   feePaid?: boolean
   /** لو اتحدد سعر عند الحجز بيتسجل العلاج والدفعة على طول */
   charge?: ChargeInput
+  doctor: DoctorId
 }) {
   const db = getDb()
   const name = input.name.trim()
   const phone = input.phone.trim()
   const reason = input.reason?.trim() || 'كشف جديد'
+  const doctor = toDoctorId(input.doctor)
   const now = Date.now()
   const { key, order } = await todayQueueState()
 
@@ -534,6 +558,7 @@ export async function checkInNewPatient(input: {
   batch.set(patientRef, {
     name,
     phone,
+    doctor,
     age: input.age ?? 0,
     address: input.address?.trim() ?? '',
     problem: reason,
@@ -554,6 +579,7 @@ export async function checkInNewPatient(input: {
       phone,
       reason,
       kind: 'new',
+      doctor,
       order,
       key,
       now,
@@ -573,6 +599,8 @@ export async function checkInFollowupPatient(input: {
   charge?: ChargeInput
   /** دفعة من الحساب القديم — بتتسجل مع الحضور في نفس الحفظة */
   oldPayment?: number
+  /** هيدخل لمين النهاردة — لو مش متحدد يبقى دكتوره المتابع */
+  doctor?: DoctorId
 }) {
   const db = getDb()
   const [patient, state, appointmentsSnap] = await Promise.all([
@@ -612,6 +640,7 @@ export async function checkInFollowupPatient(input: {
       phone: patient.phone,
       reason,
       kind: input.isNewTreatment ? 'new' : 'followup',
+      doctor: input.doctor ? toDoctorId(input.doctor) : patient.doctor,
       order: state.order,
       key: state.key,
       now,
@@ -761,6 +790,7 @@ function mapAppointment(id: string, data: DocumentData): ClinicAppointment {
     time: String(data['time'] ?? ''),
     note: String(data['note'] ?? ''),
     status: status === 'arrived' || status === 'cancelled' ? status : 'upcoming',
+    doctor: toDoctorId(data['doctor']),
     createdAt: Number(data['createdAtMs'] ?? 0),
     updatedAt: Number(data['updatedAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
@@ -770,7 +800,14 @@ function mapAppointment(id: string, data: DocumentData): ClinicAppointment {
 const byDateTime = (a: ClinicAppointment, b: ClinicAppointment) =>
   a.date.localeCompare(b.date) || (a.time || '99').localeCompare(b.time || '99')
 
-export async function createAppointment(input: { patientId: string; date: string; time?: string; note?: string }) {
+export async function createAppointment(input: {
+  patientId: string
+  date: string
+  time?: string
+  note?: string
+  /** لو مش متحدد يبقى دكتور المريض المتابع */
+  doctor?: DoctorId
+}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error('اختار تاريخ الموعد')
   if (input.date < dayKey()) throw new Error('التاريخ ده عدى — اختار يوم جاي')
   const patient = await getPatient(input.patientId)
@@ -779,6 +816,7 @@ export async function createAppointment(input: { patientId: string; date: string
     patientId: patient.id,
     patientName: patient.name,
     phone: patient.phone,
+    doctor: input.doctor ? toDoctorId(input.doctor) : patient.doctor,
     date: input.date,
     time: input.time?.trim() ?? '',
     note: input.note?.trim() ?? '',
