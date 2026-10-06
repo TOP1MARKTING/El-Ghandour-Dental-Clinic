@@ -39,8 +39,15 @@ function Login() {
       await login(email, password)
       toast.success('تم تسجيل الدخول ✅')
       void navigate({ to: '/', replace: true })
-    } catch {
-      toast.error('البريد أو كلمة المرور غلط')
+    } catch (err) {
+      const code = typeof err === 'object' && err && 'code' in err ? String((err as { code: unknown }).code) : ''
+      toast.error(
+        code === 'auth/network-request-failed'
+          ? 'مفيش نت — اتأكد من الاتصال وجرّب تاني'
+          : code === 'auth/too-many-requests'
+            ? 'محاولات كتير غلط — استنى شوية وجرّب تاني'
+            : 'البريد أو كلمة المرور غلط',
+      )
     } finally {
       setLoading(false)
     }

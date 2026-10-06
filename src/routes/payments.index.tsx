@@ -14,9 +14,9 @@ import type { Payment } from '@/types'
 export const Route = createFileRoute('/payments/')({
   head: () => ({
     meta: [
-      { title: 'الدفعات — عيادة الغندور' },
+      { title: 'الحسابات — عيادة الغندور' },
       { name: 'description', content: 'سجل الدفعات والتحصيل.' },
-      { property: 'og:title', content: 'الدفعات — عيادة الغندور' },
+      { property: 'og:title', content: 'الحسابات — عيادة الغندور' },
       { property: 'og:description', content: 'سجل الدفعات والتحصيل.' },
       { property: 'og:type', content: 'website' },
       { name: 'twitter:card', content: 'summary' },
@@ -82,8 +82,8 @@ function Payments() {
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
       <PageHeader
-        title="الدفعات"
-        description="كل الفلوس اللي اتحصّلت من المرضى"
+        title="الحسابات"
+        description="كل دفعة اتحصّلت من المرضى"
         action={
           <Button asChild>
             <Link to="/payments/new">

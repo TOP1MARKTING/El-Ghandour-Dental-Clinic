@@ -22,7 +22,6 @@ import {
 } from '@/lib/clinic-hooks'
 import {
   addDays,
-  dayKey,
   money,
   parseDayKey,
   relativeDayLabel,
@@ -120,7 +119,7 @@ function Finance() {
     custom ? customStart : starts[period],
     custom ? customEnd : undefined,
   )
-  const { data: outstanding = 0 } = useOutstandingTotal()
+  const { data: outstanding, isError: outstandingFailed } = useOutstandingTotal()
 
   const stats = useMemo(() => {
     const from = period === 'custom' ? customStart : starts[period]
@@ -225,7 +224,7 @@ function Finance() {
               icon={<Clock3 className="size-4" />}
               tone="warn"
               label="لسه عند المرضى"
-              value={money(outstanding)}
+              value={outstanding === undefined ? (outstandingFailed ? 'تعذر الحساب' : '…') : money(outstanding)}
               sub={stats.discounts > 0 ? `خصومات ${periodLabel}: ${money(stats.discounts)}` : 'كل الفلوس اللي لسه مادفعتش'}
             />
           </section>
@@ -295,7 +294,7 @@ function AddExpense() {
   const categories = useClinicSettings().settings.expenseCategories
   const [picked, setCategory] = useState('')
   const category = categories.includes(picked) ? picked : (categories[0] ?? 'أخرى')
-  const today = dayKey()
+  const today = useTodayKey()
   const [date, setDate] = useState(today)
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {

@@ -309,7 +309,7 @@ function visitWrites(
   },
 ) {
   const charge = applyDiscount(input.basePrice, input.discountPercent)
-  const paid = Math.max(0, Math.min(input.paidToday, charge.final))
+  const paid = Math.max(0, Math.min(Math.round(input.paidToday || 0), charge.final))
   const treatment = input.treatment.trim()
   const writes: Array<[DocumentReference, DocumentData]> = [
     [
@@ -428,12 +428,13 @@ export async function createPayment(input: {
 
 /** الباقي عند المرضى كلهم — مجموع من السيرفر من غير ما نقرا كل المرضى */
 export async function getOutstandingTotal() {
-  const snap = await getAggregateFromServer(collection(getDb(), 'patients'), {
-    total: sum('total'),
-    paid: sum('paid'),
-  })
-  const { total, paid } = snap.data()
-  return Math.max(0, (total ?? 0) - (paid ?? 0))
+  // كل مجموع في طلب لوحده — مجموعين في نفس الطلب محتاجين index مركّب على السيرفر
+  const patients = collection(getDb(), 'patients')
+  const [totalSnap, paidSnap] = await Promise.all([
+    getAggregateFromServer(patients, { value: sum('total') }),
+    getAggregateFromServer(patients, { value: sum('paid') }),
+  ])
+  return Math.max(0, (totalSnap.data().value ?? 0) - (paidSnap.data().value ?? 0))
 }
 
 export async function getPaymentsTotal() {
@@ -533,14 +534,17 @@ export async function checkInNewPatient(input: {
 
   const patientRef = doc(collection(db, 'patients'))
   const queueRef = doc(collection(db, 'queue'))
-  const fee = visitWrites(db, {
-    patientId: patientRef.id,
-    patientName: name,
-    treatment: NEW_PATIENT_FEE_NAME,
-    basePrice: input.feePrice,
-    paidToday: input.feePaid === false ? 0 : input.feePrice,
-    now,
-  })
+  const fee =
+    input.feePrice > 0
+      ? visitWrites(db, {
+          patientId: patientRef.id,
+          patientName: name,
+          treatment: NEW_PATIENT_FEE_NAME,
+          basePrice: input.feePrice,
+          paidToday: input.feePaid === false ? 0 : input.feePrice,
+          now,
+        })
+      : { writes: [], final: 0, paid: 0 }
   const charge =
     input.charge && input.charge.basePrice > 0
       ? visitWrites(db, {
@@ -639,7 +643,7 @@ export async function checkInFollowupPatient(input: {
       patientName: patient.name,
       phone: patient.phone,
       reason,
-      kind: input.isNewTreatment ? 'new' : 'followup',
+      kind: 'followup',
       doctor: input.doctor ? toDoctorId(input.doctor) : patient.doctor,
       order: state.order,
       key: state.key,
@@ -810,9 +814,18 @@ export async function createAppointment(input: {
 }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error('اختار تاريخ الموعد')
   if (input.date < dayKey()) throw new Error('التاريخ ده عدى — اختار يوم جاي')
-  const patient = await getPatient(input.patientId)
+  const db = getDb()
+  const [patient, existing] = await Promise.all([
+    getPatient(input.patientId),
+    getDocs(query(collection(db, 'appointments'), where('patientId', '==', input.patientId))),
+  ])
   if (!patient) throw new Error('المريض غير موجود')
-  await addDoc(collection(getDb(), 'appointments'), {
+  const sameDay = existing.docs.some((d) => {
+    const a = mapAppointment(d.id, d.data())
+    return a.date === input.date && a.status === 'upcoming'
+  })
+  if (sameDay) throw new Error('المريض ده عنده موعد في اليوم ده بالفعل')
+  await addDoc(collection(db, 'appointments'), {
     patientId: patient.id,
     patientName: patient.name,
     phone: patient.phone,

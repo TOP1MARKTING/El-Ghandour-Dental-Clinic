@@ -4,7 +4,7 @@ import { splitReasons } from '@/components/clinic/reason-select'
 import { actorLabel } from '@/lib/auth-context'
 import { usePatientAppointments, usePatientPayments, usePatientVisits } from '@/lib/clinic-hooks'
 import { formatArabicWeekday, groupByDay, money, parseDayKey, timeLabel } from '@/lib/format'
-import { NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
+import { NEW_PATIENT_FEE_NAME, patientBalance } from '@/lib/pricing'
 import { cn } from '@/lib/utils'
 import type { ClinicAppointment, Patient, Payment, Visit } from '@/types'
 
@@ -177,12 +177,15 @@ function buildEvents(
   }
 
   moneyEvents.sort((a, b) => a.event.at - b.event.at || a.event.order - b.event.order)
+  const finalBalance = moneyEvents.reduce((s, { delta }) => Math.max(0, s + delta), 0)
+  // ملفات قديمة حسابها متسجل من غير زيارات — الباقي بعد كل حركة هيطلع غلط فمش بنعرضه
+  const trustBalance = finalBalance === patientBalance(patient)
   let balance = 0
   for (const { event, delta } of moneyEvents) {
     const before = balance
     balance = Math.max(0, balance + delta)
-    events.push({ ...event, balance })
-    if (before > 0 && balance === 0) {
+    events.push(trustBalance ? { ...event, balance } : event)
+    if (trustBalance && before > 0 && balance === 0) {
       events.push({
         id: `settled-${event.id}`,
         at: event.at,

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api-errors'
 import { useMyDoctor, useUpcomingAppointments } from '@/lib/clinic-hooks'
-import { mineFirst } from '@/lib/doctors'
+import { doctorById, mineFirst } from '@/lib/doctors'
 import { DoctorFilter, type DoctorFilterValue } from '@/components/clinic/doctors'
 import { dayKey, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -99,7 +99,7 @@ function Appointments() {
         ) : groups.length === 0 ? (
           <EmptyState
             icon={<CalendarDays />}
-            title="مفيش مواعيد جاية"
+            title={doctorFilter === 'all' ? 'مفيش مواعيد جاية' : `مفيش مواعيد جاية لـ ${doctorById(doctorFilter).short}`}
             action={
               <Button onClick={() => setAdding(true)}>
                 <CalendarPlus className="size-4" />

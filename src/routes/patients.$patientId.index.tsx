@@ -42,6 +42,7 @@ import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { inputClass } from '@/components/clinic/form-layout'
 import { ToothIcon } from '@/components/clinic/dental-icons'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
+import { splitReasons } from '@/components/clinic/reason-select'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -238,6 +239,12 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
               {p.lastVisit ? `آخر زيارة: ${p.lastVisit}` : `مسجّل من ${withWeekday(p.registeredAt, p.createdAt)}`}
             </span>
           </p>
+          {p.notes ? (
+            <p className="mt-1.5 inline-flex max-w-full items-start gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1.5 text-[13px] text-amber-900">
+              <NotebookPen className="mt-0.5 size-3.5 shrink-0" />
+              <span className="whitespace-pre-line">{p.notes}</span>
+            </p>
+          ) : null}
         </div>
 
         <div className="-me-1 -mt-1 flex shrink-0 items-center sm:m-0 sm:gap-1">
@@ -354,7 +361,11 @@ function TodayStatus({ patient: p }: { patient: Patient }) {
 
   const reason = entry.reason.trim()
   const action =
-    entry.kind === 'new' || reason.includes('كشف') ? 'هيكشف' : reason === 'متابعة' || !reason ? 'متابعة' : `هيعمل ${reason}`
+    !reason || reason === 'متابعة'
+      ? 'متابعة'
+      : reason.includes('كشف')
+        ? 'هيكشف'
+        : `هيعمل ${splitReasons(reason).join(' + ')}`
   const status =
     entry.status === 'في الانتظار'
       ? `مستني دوره (رقم ${entry.order})`

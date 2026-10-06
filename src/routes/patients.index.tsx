@@ -13,6 +13,7 @@ import { PageSurface } from '@/components/clinic/app-shell'
 import { EmptyState, LoadingSkeleton, PageHeader, SearchBar } from '@/components/clinic/ui'
 import { PatientCard } from '@/components/clinic/cards'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/patients/')({
   head: () => ({
@@ -135,7 +136,14 @@ function Patients() {
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.age || '—'}</td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.lastVisit || '—'}</td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-success">{money(x.paid)}</td>
-                      <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-warning">{money(patientBalance(x))}</td>
+                      <td
+                        className={cn(
+                          'px-3 py-2.5 xl:px-4 xl:py-3',
+                          patientBalance(x) > 0 ? 'text-warning' : 'text-muted-foreground',
+                        )}
+                      >
+                        {patientBalance(x) > 0 ? money(patientBalance(x)) : x.total > 0 ? 'خالص' : '—'}
+                      </td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3">
                         <Button asChild size="sm" variant="outline">
                           <Link to="/patients/$patientId" params={{ patientId: x.id }}>

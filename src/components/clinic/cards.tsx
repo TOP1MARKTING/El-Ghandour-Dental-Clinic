@@ -35,9 +35,9 @@ export function PatientCard({ patient }: { patient: Patient }) {
             <p className="text-[11px] text-muted-foreground">الباقي</p>
             <p className="font-display text-sm font-semibold text-warning">{money(remaining)}</p>
           </>
-        ) : (
+        ) : patient.total > 0 ? (
           <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">خالص</span>
-        )}
+        ) : null}
       </div>
       <ChevronLeft className="size-4 shrink-0 text-muted-foreground" />
     </Link>

@@ -7,7 +7,7 @@ import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { Button } from '@/components/ui/button'
-import { useCheckInNew, useClinicSettings, useMyDoctor } from '@/lib/clinic-hooks'
+import { useCheckInNew, useClinicSettings, useMyDoctor, usePatients } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorPicker } from '@/components/clinic/doctors'
@@ -31,6 +31,7 @@ function CheckInNew() {
   const checkIn = useCheckInNew()
   const [saving, setSaving] = useState(false)
   const myDoctor = useMyDoctor()
+  const { data: patients = [] } = usePatients()
   const [doctor, setDoctor] = useState<DoctorId | ''>(myDoctor ?? '')
   const form = useChargeForm()
   const { settings, data: loadedSettings, isLoading: settingsLoading, refetch: reloadSettings } = useClinicSettings()
@@ -47,6 +48,14 @@ function CheckInNew() {
     const data = new FormData(e.currentTarget)
     const reason = form.treatment.trim()
     const { charge, paidN } = form
+    const phone = String(data.get('phone') ?? '').replace(/\D/g, '')
+    const existing = phone ? patients.find((p) => p.phone.replace(/\D/g, '') === phone) : undefined
+    if (
+      existing &&
+      !window.confirm(`الرقم ده متسجل قبل كده باسم «${existing.name}».\nلو هو نفس المريض استخدم «متابعة مريض» عشان الكشف ما يتحسبش تاني.\n\nمتأكد إنه مريض جديد؟`)
+    ) {
+      return
+    }
     if (charge.base <= 0 && paidN > 0) {
       toast.error('حط إجمالي السعر الأول')
       return
@@ -141,8 +150,12 @@ function CheckInNew() {
               <Check className="size-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">{settingsLoading ? 'جاري تحميل سعر الكشف...' : `الكشف ${money(fee)}`}</p>
-              <p className="text-[11px] text-muted-foreground">هيتسجل إنه دفع الكشف</p>
+              <p className="text-sm font-semibold">
+                {settingsLoading ? 'جاري تحميل سعر الكشف...' : fee > 0 ? `الكشف ${money(fee)}` : 'الكشف ببلاش'}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {fee > 0 ? 'هيتسجل إنه دفع الكشف' : 'سعر الكشف صفر في صفحة الأسعار'}
+              </p>
             </div>
           </div>
         )}
