@@ -21,6 +21,7 @@ export type ClinicUser = {
   email: string
   name: string
   role: StaffRole
+  theme?: 'pink'
 }
 
 type AuthContextValue = {
@@ -42,11 +43,14 @@ const FORMER_ACCOUNTS: Record<string, string> = {
   'admin@elghandour.com': 'د. أشرف الغندور',
 }
 const HELPER_EMAIL = 'helper@elghandour.com'
+const PINK_ACCOUNTS = new Set(['heba@elghandour.com'])
 
 function toClinicUser(user: User): ClinicUser {
   const email = (user.email ?? '').trim().toLowerCase()
   const adminName = ADMINS[email]
-  if (adminName) return { uid: user.uid, email, name: adminName, role: 'admin' }
+  if (adminName) {
+    return { uid: user.uid, email, name: adminName, role: 'admin', ...(PINK_ACCOUNTS.has(email) ? { theme: 'pink' } : {}) }
+  }
   const name =
     user.displayName?.trim() || (email === HELPER_EMAIL ? 'الاستقبال' : email.split('@')[0] || 'الاستقبال')
   return { uid: user.uid, email, name, role: 'helper' }
@@ -63,6 +67,12 @@ export function actorLabel(by: string) {
   return ADMINS[email] ?? FORMER_ACCOUNTS[email] ?? 'الاستقبال'
 }
 
+function applyTheme(theme: ClinicUser['theme']) {
+  const pink = theme === 'pink'
+  document.documentElement.classList.toggle('theme-pink', pink)
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', pink ? '#db2777' : '#2563eb')
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ClinicUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -71,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(getAuthClient(), (authUser) => {
       const clinicUser = authUser ? toClinicUser(authUser) : null
       setActorName(clinicUser?.name ?? '')
+      applyTheme(clinicUser?.theme)
       setUser(clinicUser)
       setLoading(false)
     })

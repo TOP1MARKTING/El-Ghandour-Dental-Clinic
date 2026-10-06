@@ -199,3 +199,42 @@
     radial-gradient(700px 420px at 90% -5%, oklch(0.88 0.07 258 / 0.7), transparent 65%),
     radial-gradient(600px 380px at 5% 105%, oklch(0.9 0.06 200 / 0.6), transparent 65%);
 }
+
+/* واجهة بينك لحسابات معينة — الكلاس بيتحط على <html> من auth-context */
+:root.theme-pink {
+  --background: oklch(0.975 0.014 350);
+  --foreground: oklch(0.24 0.03 350);
+  --card-foreground: oklch(0.24 0.03 350);
+  --popover-foreground: oklch(0.24 0.03 350);
+  --primary: oklch(0.62 0.2 355);
+  --secondary: oklch(0.965 0.012 350);
+  --secondary-foreground: oklch(0.32 0.04 350);
+  --muted: oklch(0.962 0.016 350);
+  --muted-foreground: oklch(0.52 0.04 350);
+  --accent: oklch(0.94 0.045 350);
+  --accent-foreground: oklch(0.5 0.18 355);
+  --border: oklch(0.915 0.025 350);
+  --input: oklch(0.89 0.03 350);
+  --ring: oklch(0.62 0.2 355);
+  --ink: oklch(0.24 0.03 350);
+  --shadow-clinic:
+    0 1px 2px oklch(0.4 0.1 355 / 0.05),
+    0 6px 20px -8px oklch(0.5 0.15 355 / 0.18);
+}
+.theme-pink .bg-scene {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Ctext x='24' y='52' font-size='26' opacity='0.13'%3E%F0%9F%8E%80%3C/text%3E%3Ctext x='140' y='160' font-size='18' opacity='0.1'%3E%F0%9F%8E%80%3C/text%3E%3Ctext x='150' y='48' font-size='14' opacity='0.12'%3E%F0%9F%A9%B7%3C/text%3E%3C/svg%3E"),
+    radial-gradient(900px 380px at 100% 0%, oklch(0.9 0.07 350 / 0.6), transparent 65%),
+    radial-gradient(700px 360px at 0% 100%, oklch(0.92 0.06 310 / 0.45), transparent 65%);
+}
+.theme-pink .surface-ink {
+  background: linear-gradient(135deg, oklch(0.72 0.17 345), var(--primary) 45%, oklch(0.55 0.2 330));
+}
+.theme-pink .text-sky-700,
+.theme-pink .text-indigo-700 {
+  color: oklch(0.5 0.18 355);
+}
+.theme-pink .bg-sky-500\/15,
+.theme-pink .bg-indigo-500\/15 {
+  background-color: oklch(0.65 0.2 355 / 0.15);
+}

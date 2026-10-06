@@ -55,6 +55,7 @@ function HomeHeader() {
       <div className="min-w-0">
         <p className="text-sm font-medium text-muted-foreground">
           {greeting}، {user?.name}
+          {user?.theme === 'pink' ? ' 🎀✨' : ''}
         </p>
         <h1 className="text-2xl font-bold leading-tight sm:text-[1.75rem]">الرئيسية</h1>
       </div>

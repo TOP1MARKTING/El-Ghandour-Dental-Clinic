@@ -92,6 +92,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const listPage = path === '/' || path === '/patients' || path === '/payments' || path === '/finance'
   const fitHeight = formPage || listPage
   const initial = user.name.trim().charAt(0) || 'د'
+  const pink = user.theme === 'pink'
+  const bow = pink ? ' 🎀' : ''
+  const avatarClass = cn(
+    'relative grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br font-bold text-white',
+    pink ? 'from-pink-400 to-fuchsia-500' : 'from-sky-400 to-indigo-500',
+  )
+  const avatar = (
+    <div className={avatarClass}>
+      {initial}
+      {pink ? <span className="absolute -top-2 -left-1 text-base leading-none">🎀</span> : null}
+    </div>
+  )
 
   return (
     <div dir="rtl" className="app-shell bg-scene text-foreground max-lg:flex max-lg:h-dvh max-lg:flex-col max-lg:overflow-hidden lg:min-h-dvh lg:overflow-x-clip">
@@ -107,7 +119,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold leading-tight">عيادة الغندور</p>
             <p className="truncate text-xs leading-tight text-white/75">
-              {user.name} · {roleLabel(user.role)}
+              {user.name}
+              {bow} · {roleLabel(user.role)}
             </p>
           </div>
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -133,7 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-base font-bold">عيادة الغندور</p>
-                  <p className="text-xs text-white/75">للأسنان والتجميل</p>
+                  <p className="text-xs text-white/75">للأسنان والتجميل{bow}</p>
                 </div>
               </Link>
 
@@ -143,9 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </nav>
 
               <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-accent/50 p-2.5">
-                <div className="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 font-bold text-white">
-                  {initial}
-                </div>
+                {avatar}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{user.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{roleLabel(user.role)}</p>
@@ -173,7 +184,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
             <div className="min-w-0">
               <p className="truncate text-base font-bold">عيادة الغندور</p>
-              <p className="text-xs text-white/75">للأسنان والتجميل</p>
+              <p className="text-xs text-white/75">للأسنان والتجميل{bow}</p>
             </div>
           </Link>
 
@@ -185,10 +196,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-accent/50 p-2.5">
-            <div className="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 font-bold text-white">
-
-              {initial}
-            </div>
+            {avatar}
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{user.name}</p>
               <p className="truncate text-xs text-muted-foreground">{roleLabel(user.role)}</p>
