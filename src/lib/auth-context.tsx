@@ -34,8 +34,12 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 /** حسابات الأدمن واسم كل واحد — أي حساب تاني بيبقى استقبال. لازم تتطابق مع isAdmin في firestore.rules */
 const ADMINS: Record<string, string> = {
-  'admin@elghandour.com': 'د. أشرف الغندور',
+  'ashraf@elghandour.com': 'د. أشرف الغندور',
   'heba@elghandour.com': 'هبة',
+}
+/** إيميلات اتغيرت بس لسه متسجلة على عمليات قديمة */
+const FORMER_ACCOUNTS: Record<string, string> = {
+  'admin@elghandour.com': 'د. أشرف الغندور',
 }
 const HELPER_EMAIL = 'helper@elghandour.com'
 
@@ -55,7 +59,8 @@ export function roleLabel(role: StaffRole) {
 /** بيانات قديمة اتسجل فيها الإيميل بدل الاسم */
 export function actorLabel(by: string) {
   if (!by.includes('@')) return by
-  return ADMINS[by.trim().toLowerCase()] ?? 'الاستقبال'
+  const email = by.trim().toLowerCase()
+  return ADMINS[email] ?? FORMER_ACCOUNTS[email] ?? 'الاستقبال'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
