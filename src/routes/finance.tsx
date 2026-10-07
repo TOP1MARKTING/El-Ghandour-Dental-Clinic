@@ -18,8 +18,11 @@ import {
   useDeleteExpense,
   useFinance,
   useOutstandingTotal,
+  usePatients,
   useTodayKey,
 } from '@/lib/clinic-hooks'
+import { DEFAULT_DOCTOR, DOCTORS, type DoctorId } from '@/lib/doctors'
+import { MoneyDonut, type DonutSlice } from '@/components/clinic/money-donut'
 import {
   addDays,
   money,
@@ -32,6 +35,8 @@ import {
   withWeekday,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
+
+const DOCTOR_COLORS: Record<DoctorId, string> = { ashraf: '#2563eb', heba: '#ec4899' }
 
 export const Route = createFileRoute('/finance')({
   head: () => ({
@@ -120,6 +125,8 @@ function Finance() {
     custom ? customEnd : undefined,
   )
   const { data: outstanding, isError: outstandingFailed } = useOutstandingTotal()
+  const { data: patients } = usePatients()
+  const patientDoctor = useMemo(() => new Map((patients ?? []).map((p) => [p.id, p.doctor])), [patients])
 
   const stats = useMemo(() => {
     const from = period === 'custom' ? customStart : starts[period]
@@ -133,17 +140,31 @@ function Finance() {
     for (const p of payments) byKind[p.kind] += p.amount
     const byCategory = new Map<string, number>()
     for (const x of expenses) byCategory.set(x.category, (byCategory.get(x.category) ?? 0) + x.amount)
+    const byDoctor: Record<DoctorId, number> = { ashraf: 0, heba: 0 }
+    for (const p of payments) byDoctor[p.doctor ?? patientDoctor.get(p.patientId) ?? DEFAULT_DOCTOR] += p.amount
     return {
       income,
       spent,
       net: income - spent,
       discounts,
       byKind,
+      byDoctor,
       payments,
       expenses,
       byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
     }
-  }, [data, period, starts, customStart])
+  }, [data, period, starts, customStart, patientDoctor])
+
+  const donutSlices: DonutSlice[] = [
+    ...DOCTORS.map((d): DonutSlice => {
+      const value = stats.byDoctor[d.id]
+      const slice: DonutSlice = { id: d.id, label: `دخل ${d.short}`, value, color: DOCTOR_COLORS[d.id] }
+      if (stats.income > 0) slice.hint = `${Math.round((value / stats.income) * 100)}%`
+      return slice
+    }),
+    { id: 'discounts', label: 'الخصومات', value: stats.discounts, color: '#f59e0b' },
+    { id: 'expenses', label: 'المصروفات', value: stats.spent, color: '#ef4444' },
+  ]
 
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const shownPayments = kindFilter === 'all' ? stats.payments : stats.payments.filter((p) => p.kind === kindFilter)
@@ -248,7 +269,12 @@ function Finance() {
               )}
             </section>
 
-            <section className="glass flex min-h-0 flex-col rounded-2xl p-3.5 sm:p-4">
+            <div className="flex min-h-0 flex-col gap-3">
+            <section className="glass shrink-0 rounded-2xl p-3.5 sm:p-4">
+              <h2 className="mb-2 text-lg font-semibold">فلوس {periodLabel} على بعض</h2>
+              <MoneyDonut slices={donutSlices} centerLabel="الدخل" centerValue={money(stats.income)} />
+            </section>
+            <section className="glass flex min-h-0 flex-1 flex-col rounded-2xl p-3.5 sm:p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-lg font-semibold">المصروفات</h2>
                 <AddExpense />
@@ -281,6 +307,7 @@ function Finance() {
                 </ul>
               )}
             </section>
+            </div>
           </div>
         </>
       )}

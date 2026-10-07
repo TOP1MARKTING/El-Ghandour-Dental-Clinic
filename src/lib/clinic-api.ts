@@ -145,6 +145,7 @@ function mapPayment(id: string, data: DocumentData): Payment {
     kind: paymentKindOf(data['kind']),
     createdAt: Number(data['createdAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
+    ...(data['doctor'] ? { doctor: toDoctorId(data['doctor']) } : {}),
   }
 }
 
@@ -280,7 +281,7 @@ export async function createVisit(input: {
     if (!patientSnap.exists()) throw new Error('المريض غير موجود')
     const patient = mapPatient(patientSnap.id, patientSnap.data())
 
-    const visit = visitWrites(db, { ...input, patientName: patient.name, now: Date.now() })
+    const visit = visitWrites(db, { ...input, patientName: patient.name, doctorId: patient.doctor, now: Date.now() })
     for (const [ref, data] of visit.writes) tx.set(ref, data)
 
     tx.update(patientRef, {
@@ -301,6 +302,8 @@ function visitWrites(
     patientName: string
     treatment: string
     doctor?: string
+    /** الدكتور اللي الدفعة بتتحسب له */
+    doctorId: DoctorId
     basePrice: number
     discountPercent?: number
     paidToday: number
@@ -340,6 +343,7 @@ function visitWrites(
         patientName: input.patientName,
         amount: paid,
         kind: treatment === NEW_PATIENT_FEE_NAME ? 'كشف' : 'علاج',
+        doctor: input.doctorId,
         now: input.now,
       }),
     ])
@@ -353,12 +357,14 @@ function paymentDoc(input: {
   amount: number
   kind: PaymentKind
   now: number
+  doctor: DoctorId
   method?: string
   note?: string
 }) {
   return {
     patientId: input.patientId,
     patient: input.patientName,
+    doctor: input.doctor,
     amount: input.amount,
     date: formatArabicDateTime(new Date(input.now)),
     method: input.method ?? 'نقدي',
@@ -408,6 +414,7 @@ export async function createPayment(input: {
         patientName: patient.name,
         amount,
         kind: 'دفعة',
+        doctor: patient.doctor,
         now: Date.now(),
         ...(input.method ? { method: input.method } : {}),
         ...(input.note ? { note: input.note } : {}),
@@ -540,6 +547,7 @@ export async function checkInNewPatient(input: {
           patientId: patientRef.id,
           patientName: name,
           treatment: NEW_PATIENT_FEE_NAME,
+          doctorId: doctor,
           basePrice: input.feePrice,
           paidToday: input.feePaid === false ? 0 : input.feePrice,
           now,
@@ -551,6 +559,7 @@ export async function checkInNewPatient(input: {
           patientId: patientRef.id,
           patientName: name,
           treatment: reason,
+          doctorId: doctor,
           basePrice: input.charge.basePrice,
           ...(input.charge.discountPercent ? { discountPercent: input.charge.discountPercent } : {}),
           paidToday: input.charge.paidToday,
@@ -621,12 +630,14 @@ export async function checkInFollowupPatient(input: {
   const reason = input.reason?.trim() || patient.problem?.trim() || 'متابعة'
   const now = Date.now()
   const queueRef = doc(collection(db, 'queue'))
+  const doctor = input.doctor ? toDoctorId(input.doctor) : patient.doctor
   const charge =
     input.charge && input.charge.basePrice > 0
       ? visitWrites(db, {
           patientId: patient.id,
           patientName: patient.name,
           treatment: reason,
+          doctorId: doctor,
           basePrice: input.charge.basePrice,
           ...(input.charge.discountPercent ? { discountPercent: input.charge.discountPercent } : {}),
           paidToday: input.charge.paidToday,
@@ -644,7 +655,7 @@ export async function checkInFollowupPatient(input: {
       phone: patient.phone,
       reason,
       kind: 'followup',
-      doctor: input.doctor ? toDoctorId(input.doctor) : patient.doctor,
+      doctor,
       order: state.order,
       key: state.key,
       now,
@@ -668,6 +679,7 @@ export async function checkInFollowupPatient(input: {
         patientName: patient.name,
         amount: oldPayment,
         kind: 'دفعة',
+        doctor: patient.doctor,
         note: 'من الحساب القديم',
         now: now + 2,
       }),

@@ -31,6 +31,8 @@ export type Payment = {
   createdAt?: number
   /** اسم اللي سجّلها */
   by?: string
+  /** الدكتور اللي الفلوس دي ليه — الدفعات القديمة من غيره وبتتحسب على دكتور المريض */
+  doctor?: DoctorId
 }
 
 export type PaymentKind = 'كشف' | 'علاج' | 'دفعة'
