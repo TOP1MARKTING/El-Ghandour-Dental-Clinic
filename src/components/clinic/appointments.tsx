@@ -1,7 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { ar } from 'date-fns/locale'
-import { CalendarCheck, CalendarDays, Clock, FileText, Phone, X } from 'lucide-react'
+import { CalendarCheck, CalendarDays, Check, Clock, FileText, Phone, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
 import { Calendar } from '@/components/ui/calendar'
@@ -11,7 +11,13 @@ import { inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
 import { Button } from '@/components/ui/button'
 import { splitReasons } from '@/components/clinic/reason-select'
-import { useCheckInFollowup, useCreateAppointment, usePatient, useUpdateAppointmentStatus } from '@/lib/clinic-hooks'
+import {
+  useCheckInFollowup,
+  useCreateAppointment,
+  usePatient,
+  useUndoAppointmentArrival,
+  useUpdateAppointmentStatus,
+} from '@/lib/clinic-hooks'
 import { ALREADY_HERE_ERROR } from '@/lib/clinic-api'
 import { addDays, dayKey, formatArabicWeekday, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -274,6 +280,126 @@ function NoteSuggestions({
         )
       })}
     </div>
+  )
+}
+
+/** موعد النهاردة بعلامة صح — الاستقبال بيعلّم عليها أول ما المريض يوصل */
+export function AppointmentCheckRow({ appointment: a }: { appointment: ClinicAppointment }) {
+  const checkIn = useCheckInFollowup()
+  const update = useUpdateAppointmentStatus()
+  const undo = useUndoAppointmentArrival()
+  const arrived = a.status === 'arrived'
+  const busy = checkIn.isPending || update.isPending || undo.isPending
+
+  const toggle = async () => {
+    try {
+      if (arrived) {
+        if (!window.confirm(`تشيل علامة الحضور من ${a.patientName}؟`)) return
+        await undo.mutateAsync({ id: a.id, patientId: a.patientId, date: a.date })
+        toast.success(`اتشالت علامة الحضور من ${a.patientName}`)
+        return
+      }
+      try {
+        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor })
+      } catch (err) {
+        if (!(err instanceof Error && err.message === ALREADY_HERE_ERROR)) throw err
+        await update.mutateAsync({ id: a.id, status: 'arrived' })
+      }
+      toast.success(`${a.patientName} حضر ✅`)
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ'))
+    }
+  }
+
+  const cancel = async () => {
+    if (!window.confirm(`إلغاء موعد ${a.patientName}؟`)) return
+    try {
+      await update.mutateAsync({ id: a.id, status: 'cancelled' })
+      toast.success('اتلغى الموعد')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الإلغاء'))
+    }
+  }
+
+  return (
+    <article
+      className={cn(
+        'flex min-w-0 items-center gap-3 rounded-2xl border px-3 py-2.5 shadow-sm transition',
+        arrived ? 'border-success/30 bg-success/5' : 'border-border/70 bg-card',
+      )}
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={arrived}
+        aria-label={arrived ? `${a.patientName} حضر — شيل العلامة` : `علّم إن ${a.patientName} حضر`}
+        title={arrived ? 'حضر — دوس تاني لو اتعملت غلط' : 'دوس لما المريض يوصل'}
+        disabled={busy}
+        onClick={() => void toggle()}
+        className={cn(
+          'grid size-11 shrink-0 place-items-center rounded-full border-2 transition active:scale-95 disabled:opacity-60',
+          arrived
+            ? 'border-success bg-success text-white shadow-sm'
+            : 'border-dashed border-primary/45 text-primary/40 hover:border-primary hover:bg-primary/5 hover:text-primary',
+        )}
+      >
+        <Check className="size-5" strokeWidth={3} />
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/patients/$patientId"
+            params={{ patientId: a.patientId }}
+            className="truncate font-semibold hover:text-primary"
+          >
+            {a.patientName}
+          </Link>
+          <DoctorBadge id={a.doctor} />
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+              arrived ? 'bg-success/15 text-success' : 'bg-warning/10 text-warning',
+            )}
+          >
+            {arrived ? 'حضر' : 'لسه ماجاش'}
+          </span>
+        </div>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+          {a.phone ? (
+            <a href={`tel:${a.phone}`} dir="ltr" className="inline-flex items-center gap-1 hover:text-primary">
+              <Phone className="size-3" />
+              {a.phone}
+            </a>
+          ) : null}
+          {a.note ? (
+            <span className="truncate rounded-full bg-violet-500/10 px-2 py-0.5 font-semibold text-violet-700">
+              {a.note}
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <Button asChild variant="outline" className="h-10 rounded-xl px-3">
+          <Link to="/patients/$patientId" params={{ patientId: a.patientId }}>
+            الملف
+          </Link>
+        </Button>
+        {arrived ? null : (
+          <Button
+            variant="ghost"
+            className="size-10 rounded-xl px-0 text-destructive"
+            disabled={busy}
+            onClick={() => void cancel()}
+            aria-label={`إلغاء موعد ${a.patientName}`}
+            title="إلغاء الموعد"
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+    </article>
   )
 }
 

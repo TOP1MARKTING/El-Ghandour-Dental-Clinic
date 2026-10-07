@@ -17,10 +17,10 @@ import {
 import { DOCTORS, mineFirst } from '@/lib/doctors'
 import { DoctorBadge } from '@/components/clinic/doctors'
 import { formatArabicWeekday, money, parseDayKey } from '@/lib/format'
-import { AppointmentForm, AppointmentRow, formatAppointmentDay } from '@/components/clinic/appointments'
+import { AppointmentCheckRow, AppointmentForm, formatAppointmentDay } from '@/components/clinic/appointments'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api-errors'
-import type { QueueEntry } from '@/types'
+import type { ClinicAppointment, QueueEntry } from '@/types'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/')({
@@ -60,11 +60,37 @@ function useTodayAppointments() {
   const { data: appointments = [] } = useUpcomingAppointments()
   const todayKey = useTodayKey()
   const myDoctor = useMyDoctor()
-  return mineFirst(
-    appointments.filter((a) => a.date === todayKey && a.status === 'upcoming'),
-    (a) => a.doctor,
-    myDoctor,
+  return useMemo(() => {
+    const today = mineFirst(
+      appointments.filter((a) => a.date === todayKey && a.status !== 'cancelled'),
+      (a) => a.doctor,
+      myDoctor,
+    )
+    // اللي لسه ماجاش فوق واللي حضر تحت
+    return [...today.filter((a) => a.status === 'upcoming'), ...today.filter((a) => a.status === 'arrived')]
+  }, [appointments, todayKey, myDoctor])
+}
+
+function TodayAppointmentsList({ appointments, className }: { appointments: ClinicAppointment[]; className?: string }) {
+  if (appointments.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+        مفيش مواعيد النهاردة
+      </p>
+    )
+  }
+  return (
+    <div className={cn('grid content-start gap-2', className)}>
+      {appointments.map((a) => (
+        <AppointmentCheckRow key={a.id} appointment={a} />
+      ))}
+    </div>
   )
+}
+
+function arrivedLabel(appointments: ClinicAppointment[]) {
+  const arrived = appointments.filter((a) => a.status === 'arrived').length
+  return arrived === 0 ? 'لسه محدش حضر' : arrived === appointments.length ? 'الكل حضر ✅' : `حضر ${arrived} من ${appointments.length}`
 }
 
 function HomeHeader() {
@@ -121,6 +147,7 @@ function DoctorHome() {
   const mineCount = visitors.filter((v) => v.doctor === myDoctor).length
   const other = DOCTORS.find((d) => d.id !== myDoctor)
   const myAppointments = todayAppointments.filter((a) => a.doctor === myDoctor).length
+  const arrivedCount = todayAppointments.filter((a) => a.status === 'arrived').length
 
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
@@ -153,7 +180,7 @@ function DoctorHome() {
           value={`${todayAppointments.length}`}
           sub={
             todayAppointments.length
-              ? `${myAppointments} ليك${other ? ` · ${todayAppointments.length - myAppointments} لـ ${other.short}` : ''}`
+              ? `${myAppointments} ليك${other ? ` · ${todayAppointments.length - myAppointments} لـ ${other.short}` : ''} · حضر ${arrivedCount}`
               : nextAppointment
                 ? `الجاي: ${formatAppointmentDay(nextAppointment.date)}`
                 : 'مفيش مواعيد جاية'
@@ -177,15 +204,7 @@ function DoctorHome() {
               <AddAppointmentButton />
             </div>
           </div>
-          <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-auto pe-1">
-            {todayAppointments.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                مفيش مواعيد النهاردة
-              </p>
-            ) : (
-              todayAppointments.map((a) => <AppointmentRow key={a.id} appointment={a} />)
-            )}
-          </div>
+          <TodayAppointmentsList appointments={todayAppointments} className="min-h-0 flex-1 overflow-auto pe-1" />
         </section>
       </div>
     </PageSurface>
@@ -281,24 +300,25 @@ function ReceptionHome() {
 
       <BookingActions />
 
-      {todayAppointments.length > 0 ? (
-        <section className="mt-3 shrink-0 rounded-2xl border border-primary/15 bg-primary/5 p-2.5 sm:mt-4 sm:p-3">
-          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+      <section className="mt-3 shrink-0 rounded-2xl border border-primary/15 bg-primary/5 p-2.5 sm:mt-4 sm:p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="min-w-0">
             <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
               <CalendarDays className="size-4 text-primary" />
-              مواعيد النهاردة ({todayAppointments.length})
+              مواعيد النهاردة{todayAppointments.length ? ` (${todayAppointments.length})` : ''}
             </h2>
-            <Link to="/appointments" className="text-xs font-semibold text-primary hover:underline">
-              كل المواعيد
-            </Link>
+            {todayAppointments.length ? (
+              <p className="text-[11px] text-muted-foreground">
+                {arrivedLabel(todayAppointments)} · دوس على علامة الصح أول ما المريض يوصل
+              </p>
+            ) : null}
           </div>
-          <div className="grid max-h-44 gap-2 overflow-auto">
-            {todayAppointments.map((a) => (
-              <AppointmentRow key={a.id} appointment={a} />
-            ))}
-          </div>
-        </section>
-      ) : null}
+          <Link to="/appointments" className="text-xs font-semibold text-primary hover:underline">
+            كل المواعيد
+          </Link>
+        </div>
+        <TodayAppointmentsList appointments={todayAppointments} className="max-h-60 overflow-auto pe-1" />
+      </section>
 
       <section className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden lg:mt-5">
         <div className="mb-3 flex items-end justify-between gap-2">

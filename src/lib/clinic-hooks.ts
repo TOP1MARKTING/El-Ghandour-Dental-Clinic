@@ -30,6 +30,7 @@ import {
   getClinicSettings,
   saveClinicSettings,
   setPatientDoctor,
+  undoAppointmentArrival,
 } from '@/lib/clinic-api'
 import { useAuth } from '@/lib/auth-context'
 import { addDays, dayKey, startOfDay } from '@/lib/format'
@@ -413,6 +414,16 @@ export function useUpdateAppointmentStatus() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: AppointmentStatus }) => updateAppointmentStatus(id, status),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['appointments'] })
+    },
+  })
+}
+
+export function useUndoAppointmentArrival() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: undoAppointmentArrival,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appointments'] })
     },

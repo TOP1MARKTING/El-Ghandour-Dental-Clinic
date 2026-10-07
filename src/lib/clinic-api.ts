@@ -855,6 +855,23 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
   await updateDoc(doc(getDb(), 'appointments', id), { status, ...touch() })
 }
 
+/** علامة الحضور اتعملت غلط — الموعد يرجع جاي ويتشال من اللي جم النهاردة لو لسه ما اتحاسبش */
+export async function undoAppointmentArrival(input: { id: string; patientId: string; date: string }) {
+  const db = getDb()
+  const queue = await getDocs(dayQueueQuery(input.date))
+  const entries = queue.docs.filter((d) => {
+    const data = d.data()
+    return String(data['patientId'] ?? '') === input.patientId && isActiveQueueStatus(String(data['status'] ?? ''))
+  })
+  if (entries.some((d) => Boolean(d.data()['billed']))) {
+    throw new Error('المريض اتسجل له حساب النهاردة — مينفعش يتلغى حضوره من هنا')
+  }
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'appointments', input.id), { status: 'upcoming', ...touch() })
+  for (const d of entries) batch.update(d.ref, { status: 'ملغي', ...touch() })
+  await batch.commit()
+}
+
 /* ───────── إعدادات العيادة: settings/clinic ───────── */
 
 function numberList(value: unknown, fallback: number[]) {
