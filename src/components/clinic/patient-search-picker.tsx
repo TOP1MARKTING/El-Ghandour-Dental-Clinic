@@ -9,10 +9,13 @@ export function PatientSearchPicker({
   value,
   onChange,
   required = false,
+  minimal = false,
 }: {
   value: string
   onChange: (patientId: string) => void
   required?: boolean
+  /** بعد الاختيار: الاسم والموبايل بس — الصفحة نفسها بتعرض الدكتور والعلاج */
+  minimal?: boolean
 }) {
   const { data: patients = [], isLoading } = usePatients()
   const [query, setQuery] = useState('')
@@ -48,13 +51,13 @@ export function PatientSearchPicker({
         <div className="min-w-0 flex-1 leading-tight">
           <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
             <span className="truncate">{selected.name}</span>
-            <DoctorBadge id={selected.doctor} />
+            {minimal ? null : <DoctorBadge id={selected.doctor} />}
           </p>
           <p className="truncate text-[11px] text-muted-foreground">
             <span dir="ltr">{selected.phone}</span>
           </p>
         </div>
-        {selected.problem ? (
+        {selected.problem && !minimal ? (
           <span className="hidden max-w-[9rem] truncate rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground sm:inline">
             {selected.problem}
           </span>

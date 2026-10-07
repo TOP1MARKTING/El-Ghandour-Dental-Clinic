@@ -13,7 +13,7 @@ import { useCheckInFollowup, usePatients } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
 import { doctorById, type DoctorId } from '@/lib/doctors'
-import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
+import { DoctorPicker } from '@/components/clinic/doctors'
 import { cn } from '@/lib/utils'
 import type { Patient } from '@/types'
 
@@ -128,7 +128,7 @@ function CheckInFollowup() {
       wide={!!selected}
     >
       <Field dense label="المريض" className="col-span-full">
-        <PatientSearchPicker value={patientId} onChange={setPatientId} required />
+        <PatientSearchPicker value={patientId} onChange={setPatientId} required minimal />
       </Field>
 
       {selected ? (
@@ -193,7 +193,6 @@ function PatientSummary({ patient: p, remaining }: { patient: Patient; remaining
     <section className="grid content-start gap-2.5 rounded-2xl border border-border/70 bg-muted/25 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="inline-flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <DoctorBadge id={p.doctor} />
           <CalendarClock className="size-3.5" />
           {p.lastVisit ? `آخر زيارة: ${p.lastVisit}` : 'أول مرة يتابع'}
         </p>
@@ -240,11 +239,8 @@ function OldBalance({
 
   return (
     <div className="grid gap-1.5 rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm font-semibold">
-      <label htmlFor="old-paid" className="flex flex-wrap items-center justify-between gap-2">
-        <span>
-          دفع من الحساب القديم <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
-        </span>
-        <span className="text-xs text-warning">عليه {money(remaining)}</span>
+      <label htmlFor="old-paid">
+        هيدفع من اللي عليه؟ <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
       </label>
       <div className="relative">
         <input
