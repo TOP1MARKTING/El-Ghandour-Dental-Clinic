@@ -36,3 +36,7 @@ firebase.json
 .firebaserc
 firestore.rules
 firestore.indexes.json
+
+# Server secrets
+.env
+.env.*
