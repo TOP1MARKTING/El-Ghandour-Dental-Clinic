@@ -69,7 +69,7 @@ function Services() {
   }
 
   return (
-    <PageSurface>
+    <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
       <PageHeader title="الخدمات والأسعار" description="أنواع الكشف والعلاج بسعر ثابت — بيتحط تلقائي في الحساب" />
 
       <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
@@ -128,8 +128,8 @@ function ServiceGroups({ services }: { services: Service[] }) {
     })
 
   return (
-    <div className="@container">
-      <div className="grid items-start gap-2 @2xl:grid-cols-2">
+    <div className="@container min-h-0 flex-1 overflow-auto pe-1">
+      <div className="grid items-start gap-2 @2xl:grid-cols-2 @5xl:grid-cols-3">
         {groups.map((group) => {
           if (group.items.length === 1) {
             const s = group.items[0]!

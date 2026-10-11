@@ -108,7 +108,7 @@ function Appointments() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
             {groups.map(([date, list]) => {
               const today = daysFromToday(date) === 0
               const day = parseDayKey(date)

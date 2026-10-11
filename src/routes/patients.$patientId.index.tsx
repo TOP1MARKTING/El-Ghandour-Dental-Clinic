@@ -102,12 +102,12 @@ function Profile() {
   }
 
   return (
-    <PageSurface>
+    <PageSurface className="flex flex-col lg:h-full lg:overflow-hidden">
       <ProfileHeader patient={p} />
 
-      <div className="mt-3 grid items-start gap-3 sm:mt-4 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_250px] xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="mt-3 grid items-start gap-3 sm:mt-4 sm:gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_250px] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_300px]">
         <PatientTabs patient={p} visits={visits} />
-        <aside className="max-lg:order-first">
+        <aside className="max-lg:order-first lg:max-h-full lg:overflow-auto">
           <AccountCard patient={p} />
         </aside>
       </div>
@@ -131,8 +131,8 @@ function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] })
   ]
 
   return (
-    <section className="glass overflow-hidden rounded-2xl">
-      <div className="flex gap-1 border-b border-border bg-muted/40 p-1.5" role="tablist">
+    <section className="glass overflow-hidden rounded-2xl lg:flex lg:max-h-full lg:flex-col">
+      <div className="flex shrink-0 gap-1 border-b border-border bg-muted/40 p-1.5" role="tablist">
         {tabs.map((t) => {
           const active = tab === t.id
           return (
@@ -164,7 +164,7 @@ function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] })
         })}
       </div>
 
-      <div className="p-3.5 sm:p-5">
+      <div className="p-3.5 sm:p-5 lg:min-h-0 lg:overflow-auto">
         {tab === 'new' ? (
           <AddTreatmentForm
             key={formKey}
@@ -489,7 +489,7 @@ function PatientHistory({
           <span className="rounded-full bg-success/10 px-3 py-1 text-success">دفع {money(paidTotal)}</span>
         ) : null}
       </div>
-      <div className="max-h-[36rem] overflow-auto pe-1">
+      <div className="pe-1">
         <PatientTimeline patient={patient} />
       </div>
     </div>
@@ -506,18 +506,18 @@ function useUpcomingPatientAppointments(patientId: string) {
 
 function AppointmentsPanel({ patientId, upcoming }: { patientId: string; upcoming: ClinicAppointment[] }) {
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       {upcoming.length > 0 ? (
-        <section className="rounded-2xl border border-violet-500/30 bg-gradient-to-l from-violet-500/15 to-fuchsia-500/10 p-3">
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-violet-800">
+        <section className="rounded-2xl border border-violet-500/30 bg-gradient-to-l from-violet-500/15 to-fuchsia-500/10 p-2">
+          <h3 className="mb-1.5 flex items-center gap-2 px-1 text-sm font-bold text-violet-800">
             <CalendarDays className="size-4" />
             {upcoming.length === 1 ? 'عنده ميعاد جاي' : `عنده ${upcoming.length} مواعيد جاية`}
           </h3>
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-1.5 sm:grid-cols-2">
             {upcoming.map((a) => (
-              <li key={a.id} className="flex items-center gap-2.5 rounded-xl bg-card/90 px-3 py-2.5 shadow-sm">
-                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-600 text-white">
-                  <CalendarDays className="size-5" />
+              <li key={a.id} className="flex items-center gap-2.5 rounded-xl bg-card/90 px-2.5 py-1.5 shadow-sm">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-600 text-white">
+                  <CalendarDays className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold">

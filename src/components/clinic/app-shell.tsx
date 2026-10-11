@@ -89,8 +89,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (loading || !user) return <BootScreen />
 
   const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
-  const listPage = path === '/' || path === '/patients' || path === '/payments' || path === '/finance'
-  const fitHeight = formPage || listPage
+  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services'].includes(path)
+  const profilePage = /^\/patients\/[^/]+$/.test(path) && !formPage
+  const fitHeight = formPage || listPage || profilePage
   const initial = user.name.replace(/^د\.\s*/, '').trim().charAt(0) || 'د'
   const pink = user.theme === 'pink'
   const bow = pink ? ' 🎀' : ''

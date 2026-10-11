@@ -73,8 +73,7 @@ const QUICK_DAYS = [
 
 export function AppointmentDateField({ date, setDate }: { date: string; setDate: (v: string) => void }) {
   return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5">
         {QUICK_DAYS.map(({ label, days }) => {
           const value = keyAfter(days)
           const active = date === value
@@ -94,12 +93,11 @@ export function AppointmentDateField({ date, setDate }: { date: string; setDate:
             </button>
           )
         })}
-      </div>
-      <div className="grid gap-1 text-xs font-semibold text-muted-foreground">
-        أو اختار يوم
-        <ArabicDatePicker value={date} onChange={setDate} />
-      </div>
-      {date ? <p className="text-xs font-semibold text-primary">الموعد: {formatAppointmentDay(date)}</p> : null}
+      <ArabicDatePicker
+        value={date}
+        onChange={setDate}
+        className={cn('h-9 min-w-40 flex-1 text-sm sm:h-9', date && 'border-primary font-semibold text-primary')}
+      />
     </div>
   )
 }
@@ -226,10 +224,10 @@ export function AppointmentForm({
         <AppointmentDateField date={date} setDate={setDate} />
       </div>
       <Field dense label="ملاحظة" hint="اختياري">
-        <div className="grid gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <NoteSuggestions patientId={patientId} note={note} setNote={setNote} />
           <input
-            className={cn(inputClass, 'bg-card')}
+            className={cn(inputClass, 'h-9 min-w-40 flex-1 bg-card text-sm sm:h-9')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="أو اكتب ملاحظة"
@@ -260,7 +258,7 @@ function NoteSuggestions({
   const options = [...current.map((r) => `تكملة ${r}`), 'متابعة', 'مراجعة']
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="contents">
       {options.map((option, i) => {
         const active = note === option
         return (
