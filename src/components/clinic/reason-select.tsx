@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react'
+import { Check, ChevronDown, Minus, Plus } from 'lucide-react'
 import { groupByFirstWord, subServiceName, VISIT_REASONS } from '@/lib/visit-reasons'
 import { useServices } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
@@ -83,7 +83,7 @@ export function ReasonSelect({
   const setQty = (reason: string, qty: number) =>
     commit(picked.map((p) => (p.name === reason ? { ...p, qty: Math.min(MAX_QTY, Math.max(1, qty)) } : p)))
 
-  const rowHeight = dense ? 'min-h-12 sm:min-h-11' : 'min-h-12'
+  const rowHeight = dense ? 'min-h-12 sm:min-h-10' : 'min-h-12'
   const cardClass = (highlight: boolean) =>
     cn(
       'rounded-2xl border bg-card shadow-sm transition',
@@ -101,36 +101,83 @@ export function ReasonSelect({
     </span>
   )
 
-  const nameWithPrice = (reason: string, label: string) => {
+  const nameWithPrice = (reason: string, label: string, qty = 1) => {
     const price = priceOf(reason)
     return (
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold leading-tight">{label}</span>
-        {price > 0 ? <span className="block text-[11px] font-medium text-muted-foreground">{money(price)}</span> : null}
+        {price > 0 ? (
+          <span className="block text-[11px] font-medium text-muted-foreground">
+            {money(price * qty)}
+            {qty > 1 ? ` (×${qty})` : ''}
+          </span>
+        ) : null}
       </span>
+    )
+  }
+
+  const qtyStepper = (reason: string, qty: number) => (
+    <div className="flex items-center justify-between gap-1 px-2 pb-1.5">
+      <span className="text-[11px] font-semibold text-muted-foreground">العدد</span>
+      <div className="flex items-center rounded-lg border border-border bg-card">
+        <button
+          type="button"
+          onClick={() => setQty(reason, qty + 1)}
+          disabled={qty >= MAX_QTY}
+          className="grid size-7 place-items-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-35"
+          aria-label={`زوّد عدد ${reason}`}
+        >
+          <Plus className="size-3.5" />
+        </button>
+        <span className="font-display min-w-6 text-center text-sm font-bold tabular-nums">{qty}</span>
+        <button
+          type="button"
+          onClick={() => setQty(reason, qty - 1)}
+          disabled={qty <= 1}
+          className="grid size-7 place-items-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-35"
+          aria-label={`قلّل عدد ${reason}`}
+        >
+          <Minus className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+
+  /** الخدمة بعلامة صح — ولما تتختار بيظهر تحتها العدد */
+  const option = (reason: string, label: string, nested: boolean) => {
+    const qty = picked.find((p) => p.name === reason)?.qty
+    const active = qty !== undefined
+    return (
+      <div
+        key={reason}
+        className={
+          nested
+            ? cn('rounded-xl transition', active ? 'bg-primary/10 text-primary' : 'hover:bg-card')
+            : cn(cardClass(active), active && 'bg-primary/5')
+        }
+      >
+        <button
+          type="button"
+          aria-pressed={active}
+          onClick={() => toggle(reason)}
+          className={cn(nested ? 'min-h-10 py-1' : rowHeight, 'flex w-full items-center gap-2 px-3 text-start')}
+        >
+          {nameWithPrice(reason, label, qty)}
+          {checkMark(active)}
+        </button>
+        {active ? qtyStepper(reason, qty) : null}
+      </div>
     )
   }
 
   return (
     <div className="grid gap-2">
       <input type="hidden" name={name} value={value} required={required} />
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] items-start gap-2">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] items-start gap-1.5">
         {groups.map((group) => {
           if (group.items.length === 1) {
             const reason = group.items[0]!
-            const active = selected.includes(reason)
-            return (
-              <button
-                key={reason}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggle(reason)}
-                className={cn(cardClass(active), rowHeight, 'flex w-full items-center gap-2 px-3 text-start', active && 'bg-primary/5')}
-              >
-                {nameWithPrice(reason, reason)}
-                {checkMark(active)}
-              </button>
-            )
+            return option(reason, reason, false)
           }
 
           const isOpen = openGroup === group.key
@@ -160,24 +207,7 @@ export function ReasonSelect({
               </button>
               {isOpen ? (
                 <div className="grid gap-1 border-t border-border/60 bg-muted/30 p-1.5 grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))]">
-                  {group.items.map((reason) => {
-                    const active = selected.includes(reason)
-                    return (
-                      <button
-                        key={reason}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => toggle(reason)}
-                        className={cn(
-                          'flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-1 text-start transition',
-                          active ? 'bg-primary/10 text-primary' : 'hover:bg-card',
-                        )}
-                      >
-                        {nameWithPrice(reason, subServiceName(reason, group.key))}
-                        {checkMark(active)}
-                      </button>
-                    )
-                  })}
+                  {group.items.map((reason) => option(reason, subServiceName(reason, group.key), true))}
                 </div>
               ) : null}
             </div>
@@ -185,63 +215,13 @@ export function ReasonSelect({
         })}
       </div>
 
-      {picked.length > 0 ? (
-        <div className="grid gap-1.5 rounded-2xl border border-primary/25 bg-primary/5 p-2">
-          <p className="px-1 text-xs font-bold text-primary">اخترت ({picked.length}) — حدد العدد</p>
-          <ul className="grid gap-1.5">
-            {picked.map(({ name: reason, qty }) => {
-              const price = priceOf(reason)
-              return (
-                <li key={reason} className="flex items-center gap-2 rounded-xl bg-card px-2.5 py-1.5 shadow-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{reason}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {price <= 0
-                        ? 'مالهاش سعر متحدد'
-                        : qty > 1
-                          ? `${money(price)} × ${qty} = ${money(price * qty)}`
-                          : money(price)}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center rounded-xl border border-border bg-muted/40" title="العدد">
-                    <button
-                      type="button"
-                      onClick={() => setQty(reason, qty + 1)}
-                      disabled={qty >= MAX_QTY}
-                      className="grid size-9 place-items-center rounded-xl text-primary hover:bg-primary/10 disabled:opacity-35"
-                      aria-label={`زوّد عدد ${reason}`}
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                    <span className="font-display min-w-7 text-center text-base font-bold tabular-nums">{qty}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQty(reason, qty - 1)}
-                      disabled={qty <= 1}
-                      className="grid size-9 place-items-center rounded-xl text-primary hover:bg-primary/10 disabled:opacity-35"
-                      aria-label={`قلّل عدد ${reason}`}
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggle(reason)}
-                    className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-destructive"
-                    aria-label={`شيل ${reason}`}
-                  >
-                    <X className="size-4" />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      ) : (
-        <p className="text-[11px] font-medium text-muted-foreground">
-          {required ? `${placeholder} — تقدر تختار أكتر من حاجة` : 'تقدر تختار أكتر من حاجة'}
-        </p>
-      )}
+      <p className="truncate text-[11px] font-medium text-muted-foreground">
+        {picked.length > 0
+          ? `اخترت: ${picked.map((p) => reasonPart(p.name, p.qty)).join('، ')}`
+          : required
+            ? `${placeholder} — تقدر تختار أكتر من حاجة وتحدد العدد`
+            : 'تقدر تختار أكتر من حاجة وتحدد العدد'}
+      </p>
     </div>
   )
 }

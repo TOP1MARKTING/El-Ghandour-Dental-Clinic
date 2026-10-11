@@ -96,7 +96,9 @@ export function FormPage({
           <div
             className={cn(
               'flex shrink-0 items-center gap-2 border-t border-border/70',
-              compact ? 'mt-3 pt-2.5' : 'mt-auto pt-3',
+              compact
+                ? 'sticky bottom-0 z-10 -mx-3 mt-3 bg-card/95 px-3 py-2.5 backdrop-blur sm:-mx-4 sm:px-4'
+                : 'mt-auto pt-3',
             )}
           >
             <Button

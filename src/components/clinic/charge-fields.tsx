@@ -95,7 +95,7 @@ export function ChargeFields({
   const { settings } = useClinicSettings()
   const presets = settings.discountPresets
   const customDiscount = !presets.includes(form.discount)
-  const priceHint = form.priceLocked ? 'بيتحسب من الخدمات' : !priceRequired ? 'اختياري' : undefined
+  const priceHint = form.priceLocked ? 'من الأسعار' : undefined
 
   return (
     <>
@@ -116,7 +116,7 @@ export function ChargeFields({
       </Field>
 
       <div className={cn('@container col-span-full rounded-2xl border border-border/70 bg-muted/25 p-3', panelClassName)}>
-        <div className="grid grid-cols-2 gap-3 @xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 @xs:grid-cols-3">
           <Field dense label="الإجمالي" {...(priceHint ? { hint: priceHint } : {})}>
             <input
               className={cn(
@@ -141,7 +141,7 @@ export function ChargeFields({
           <Field dense label="المدفوع">
             <div className="relative">
               <input
-                className={cn(inputClass, 'bg-card pl-20')}
+                className={cn(inputClass, 'bg-card pl-14')}
                 name="paidToday"
                 type="number"
                 min="0"
@@ -155,8 +155,9 @@ export function ChargeFields({
                   type="button"
                   onClick={() => form.setPaid(String(charge.final))}
                   className="absolute left-1.5 top-1/2 h-8 -translate-y-1/2 rounded-xl bg-primary/10 px-2.5 text-xs font-semibold text-primary"
+                  title="دفع كامل"
                 >
-                  دفع كامل
+                  الكل
                 </button>
               ) : null}
             </div>
@@ -164,7 +165,7 @@ export function ChargeFields({
 
           <Stat
             label="الباقي"
-            className="col-span-2 @xl:col-span-1"
+            className="col-span-2 @xs:col-span-1"
             tone={form.remaining > 0 ? 'text-warning' : 'text-success'}
           >
             {money(form.remaining)}
@@ -180,8 +181,9 @@ export function ChargeFields({
           ) : null}
 
           {form.isAdmin ? (
-            <Field dense label="خصم" hint="للأدمن بس" className="col-span-full">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="col-span-full flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+              <span className="me-1">خصم</span>
+              <div className="contents">
                 {presets.map((p) => (
                   <button
                     key={p}
@@ -197,7 +199,7 @@ export function ChargeFields({
                     {p === 0 ? 'بدون' : `${p}%`}
                   </button>
                 ))}
-                <div className="relative w-28">
+                <div className="relative w-24">
                   <input
                     className={cn(
                       inputClass,
@@ -218,7 +220,7 @@ export function ChargeFields({
                   </span>
                 </div>
               </div>
-            </Field>
+            </div>
           ) : null}
         </div>
       </div>

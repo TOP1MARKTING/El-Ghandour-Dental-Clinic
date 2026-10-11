@@ -105,7 +105,7 @@ function CheckInNew() {
       submitDisabled={saving || settingsLoading || feeMissing}
       onSubmit={submit}
       wide
-      gridClassName="lg:grid-rows-[auto_1fr]"
+      gridClassName="lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-rows-[auto_1fr]"
     >
       <div className="col-span-full grid content-start gap-2.5 sm:grid-cols-2 sm:gap-x-3 lg:col-span-1 lg:col-start-1 lg:row-start-1">
         <Field dense label="هيدخل لمين" className="sm:col-span-2">
