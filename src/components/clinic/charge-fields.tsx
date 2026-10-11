@@ -148,7 +148,7 @@ export function ChargeFields({
                 step="1"
                 value={form.paid}
                 onChange={(e) => form.setPaid(e.target.value)}
-                placeholder="مدفعش"
+                placeholder="0"
               />
               {charge.final > 0 ? (
                 <button

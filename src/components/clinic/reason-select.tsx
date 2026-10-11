@@ -186,45 +186,56 @@ export function ReasonSelect({
       </div>
 
       {picked.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-muted-foreground">اخترت:</span>
-          {picked.map(({ name: reason, qty }) => (
-            <span
-              key={reason}
-              className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 ps-2.5 pe-1 text-xs font-semibold text-primary"
-            >
-              {reason}
-              <span className="inline-flex items-center rounded-full bg-card/80" title="العدد">
-                <button
-                  type="button"
-                  onClick={() => setQty(reason, qty - 1)}
-                  disabled={qty <= 1}
-                  className="grid size-6 place-items-center rounded-full hover:bg-primary/15 disabled:opacity-35"
-                  aria-label={`قلّل عدد ${reason}`}
-                >
-                  <Minus className="size-3" />
-                </button>
-                <span className="min-w-6 text-center tabular-nums">×{qty}</span>
-                <button
-                  type="button"
-                  onClick={() => setQty(reason, qty + 1)}
-                  disabled={qty >= MAX_QTY}
-                  className="grid size-6 place-items-center rounded-full hover:bg-primary/15 disabled:opacity-35"
-                  aria-label={`زوّد عدد ${reason}`}
-                >
-                  <Plus className="size-3" />
-                </button>
-              </span>
-              <button
-                type="button"
-                onClick={() => toggle(reason)}
-                className="grid size-5 place-items-center rounded-full hover:bg-primary/15"
-                aria-label={`شيل ${reason}`}
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
+        <div className="grid gap-1.5 rounded-2xl border border-primary/25 bg-primary/5 p-2">
+          <p className="px-1 text-xs font-bold text-primary">اخترت ({picked.length}) — حدد العدد</p>
+          <ul className="grid gap-1.5">
+            {picked.map(({ name: reason, qty }) => {
+              const price = priceOf(reason)
+              return (
+                <li key={reason} className="flex items-center gap-2 rounded-xl bg-card px-2.5 py-1.5 shadow-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{reason}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {price <= 0
+                        ? 'مالهاش سعر متحدد'
+                        : qty > 1
+                          ? `${money(price)} × ${qty} = ${money(price * qty)}`
+                          : money(price)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center rounded-xl border border-border bg-muted/40" title="العدد">
+                    <button
+                      type="button"
+                      onClick={() => setQty(reason, qty + 1)}
+                      disabled={qty >= MAX_QTY}
+                      className="grid size-9 place-items-center rounded-xl text-primary hover:bg-primary/10 disabled:opacity-35"
+                      aria-label={`زوّد عدد ${reason}`}
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                    <span className="font-display min-w-7 text-center text-base font-bold tabular-nums">{qty}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQty(reason, qty - 1)}
+                      disabled={qty <= 1}
+                      className="grid size-9 place-items-center rounded-xl text-primary hover:bg-primary/10 disabled:opacity-35"
+                      aria-label={`قلّل عدد ${reason}`}
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggle(reason)}
+                    className="grid size-9 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-rose-50 hover:text-destructive"
+                    aria-label={`شيل ${reason}`}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       ) : (
         <p className="text-[11px] font-medium text-muted-foreground">
