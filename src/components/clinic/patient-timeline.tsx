@@ -134,7 +134,11 @@ function buildEvents(
     const name = splitReasons(v.treatment).join(' + ') || v.treatment || NEW_PATIENT_FEE_NAME
     const parts: string[] = []
     if (v.price > 0) {
-      parts.push(paid >= v.price ? 'دفعه كله' : paid > 0 ? `دفع ${money(paid)}` : 'مدفعش حاجة')
+      parts.push(
+        paid >= v.price
+          ? 'دفعه كله'
+          : `${paid > 0 ? `دفع ${money(paid)}` : 'مدفعش حاجة'} · باقي ${money(v.price - paid)}`,
+      )
     } else {
       parts.push('من غير سعر')
     }
@@ -148,7 +152,11 @@ function buildEvents(
         order: 1,
         icon: <Stethoscope className="size-4" />,
         tone: 'bg-sky-500/15 text-sky-700',
-        title: name === NEW_PATIENT_FEE_NAME ? 'كشف' : `عمل ${name}`,
+        title: v.oldBalance
+          ? `حساب قديم${v.treatment.trim() ? ` — ${v.treatment.trim()}` : ''}`
+          : name === NEW_PATIENT_FEE_NAME
+            ? 'كشف'
+            : `عمل ${name}`,
         detail: parts.join(' · '),
         amount: v.price > 0 ? money(v.price) : undefined,
         by: v.by,

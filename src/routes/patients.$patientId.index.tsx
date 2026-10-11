@@ -41,6 +41,7 @@ import { EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { inputClass } from '@/components/clinic/form-layout'
 import { ToothIcon } from '@/components/clinic/dental-icons'
+import { OldBalanceDialog } from '@/components/clinic/old-balance'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
 import { splitReasons } from '@/components/clinic/reason-select'
 import { Button } from '@/components/ui/button'
@@ -170,7 +171,7 @@ function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] })
             patientId={patientId}
             onSaved={() => {
               setFormKey((k) => k + 1)
-              setTab('history')
+              setTab('appointments')
             }}
           />
         ) : tab === 'history' ? (
@@ -316,7 +317,7 @@ function AccountCard({ patient: p }: { patient: Patient }) {
             : 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
         )}
       >
-        <p className="text-xs font-semibold text-muted-foreground">لسه عليه</p>
+        <p className="text-xs font-semibold text-muted-foreground">الباقي عليه</p>
         <p
           className={cn(
             'font-display mt-0.5 text-2xl font-semibold sm:mt-1 sm:text-3xl',
@@ -339,6 +340,8 @@ function AccountCard({ patient: p }: { patient: Patient }) {
           <dd className="font-display font-semibold text-success">{money(p.paid)}</dd>
         </div>
       </dl>
+
+      <OldBalanceDialog patientId={p.id} patientName={p.name} />
 
       {next ? (
         <p className="mt-2 flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-accent-foreground">
@@ -414,7 +417,11 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
         discountPercent: form.discount,
         paidToday: paidN,
       })
-      toast.success('تم تسجيل العلاج والدفعة ✅')
+      toast.success(
+        form.remaining > 0
+          ? `اتسجل العلاج · الباقي ${money(form.remaining)} — احجزله الميعاد الجاي`
+          : 'اتسجل العلاج ودفعه كله ✅ — احجزله الميعاد الجاي',
+      )
       onSaved()
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
@@ -434,7 +441,7 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
       <div className="flex justify-end">
         <Button type="submit" className="h-11 w-full rounded-xl sm:h-10 sm:w-auto sm:min-w-44" disabled={create.isPending}>
           <NotebookPen className="size-4" />
-          {create.isPending ? 'جاري الحفظ...' : 'حفظ العلاج والدفعة'}
+          {create.isPending ? 'جاري الحفظ...' : 'حفظ العلاج'}
         </Button>
       </div>
     </form>

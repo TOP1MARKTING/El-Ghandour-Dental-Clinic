@@ -207,10 +207,10 @@ function PatientSummary({ patient: p, remaining }: { patient: Patient; remaining
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <MiniStat label="إجمالي حسابه" value={money(p.total)} />
-        <MiniStat label="دفع" value={money(p.paid)} tone="text-success" />
+        <MiniStat label="الإجمالي" value={money(p.total)} />
+        <MiniStat label="المدفوع" value={money(p.paid)} tone="text-success" />
         <MiniStat
-          label="لسه عليه"
+          label="الباقي"
           value={remaining > 0 ? money(remaining) : 'خالص'}
           tone={remaining > 0 ? 'text-warning' : 'text-success'}
         />

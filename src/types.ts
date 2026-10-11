@@ -71,6 +71,8 @@ export type Visit = {
   notes: string
   createdAt?: number
   by?: string
+  /** حساب من قبل السيستم — اتكتب بإيده مش علاج اتعمل هنا */
+  oldBalance?: boolean
 }
 
 export type Service = {

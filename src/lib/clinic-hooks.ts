@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
+  addOldBalance,
   createExpense,
   createPatient,
   createPayment,
@@ -268,6 +269,14 @@ export function useCreateVisit() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createVisit,
+    onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
+  })
+}
+
+export function useAddOldBalance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: addOldBalance,
     onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
   })
 }

@@ -116,7 +116,7 @@ function Patients() {
               <table className="w-full text-right">
                 <thead className="sticky top-0 border-b border-border bg-muted text-sm text-muted-foreground">
                   <tr>
-                    {['اسم المريض', 'الدكتور', 'رقم الهاتف', 'السن', 'آخر زيارة', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
+                    {['اسم المريض', 'الدكتور', 'رقم الهاتف', 'السن', 'آخر زيارة', 'الإجمالي', 'المدفوع', 'الباقي', 'الإجراءات'].map((x) => (
                       <th key={x} className="whitespace-nowrap px-3 py-2.5 font-semibold xl:px-4 xl:py-3">
                         {x}
                       </th>
@@ -135,6 +135,7 @@ function Patients() {
                       </td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.age || '—'}</td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3">{x.lastVisit || '—'}</td>
+                      <td className="px-3 py-2.5 xl:px-4 xl:py-3">{money(x.total)}</td>
                       <td className="px-3 py-2.5 xl:px-4 xl:py-3 text-success">{money(x.paid)}</td>
                       <td
                         className={cn(

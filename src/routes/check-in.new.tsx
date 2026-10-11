@@ -34,6 +34,7 @@ function CheckInNew() {
   const { data: patients = [] } = usePatients()
   const [doctor, setDoctor] = useState<DoctorId | ''>(myDoctor ?? '')
   const form = useChargeForm()
+  const [feePaid, setFeePaid] = useState(true)
   const { settings, data: loadedSettings, isLoading: settingsLoading, refetch: reloadSettings } = useClinicSettings()
   const fee = settings.newPatientFee
   const feeMissing = !settingsLoading && !loadedSettings
@@ -73,14 +74,14 @@ function CheckInNew() {
         phone: String(data.get('phone') ?? ''),
         address: String(data.get('address') ?? ''),
         feePrice: fee,
-        feePaid: true,
+        feePaid,
         doctor,
         ...(reason ? { reason } : {}),
         ...(charge.base > 0
           ? { charge: { basePrice: charge.base, discountPercent: form.discount, paidToday: paidN } }
           : {}),
       })
-      const owed = charge.base > 0 ? form.remaining : 0
+      const owed = (charge.base > 0 ? form.remaining : 0) + (feePaid ? 0 : fee)
       toast.success(
         owed > 0
           ? `${name} اتسجل مع ${doctorById(doctor).short} · لسه عليه ${money(owed)}`
@@ -154,9 +155,20 @@ function CheckInNew() {
                 {settingsLoading ? 'جاري تحميل سعر الكشف...' : fee > 0 ? `الكشف ${money(fee)}` : 'الكشف ببلاش'}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {fee > 0 ? 'هيتسجل إنه دفع الكشف' : 'سعر الكشف صفر في صفحة الأسعار'}
+                {fee <= 0 ? 'سعر الكشف صفر في صفحة الأسعار' : feePaid ? 'دفع الكشف' : 'الكشف هيتسجل عليه'}
               </p>
             </div>
+            {fee > 0 ? (
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-xs font-semibold">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={!feePaid}
+                  onChange={(e) => setFeePaid(!e.target.checked)}
+                />
+                مدفعش الكشف
+              </label>
+            ) : null}
           </div>
         )}
       </div>

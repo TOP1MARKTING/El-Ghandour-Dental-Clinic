@@ -10,7 +10,7 @@ import { Field } from '@/components/clinic/ui'
 import { inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
 import { Button } from '@/components/ui/button'
-import { splitReasons } from '@/components/clinic/reason-select'
+import { parseReason, splitReasons } from '@/components/clinic/reason-select'
 import {
   useCheckInFollowup,
   useCreateAppointment,
@@ -254,7 +254,9 @@ function NoteSuggestions({
   setNote: (v: string) => void
 }) {
   const { data: patient } = usePatient(patientId)
-  const current = splitReasons(patient?.problem ?? '').filter((r) => !r.includes('كشف'))
+  const current = splitReasons(patient?.problem ?? '')
+    .map((r) => parseReason(r).name)
+    .filter((r) => !r.includes('كشف'))
   const options = [...current.map((r) => `تكملة ${r}`), 'متابعة', 'مراجعة']
 
   return (

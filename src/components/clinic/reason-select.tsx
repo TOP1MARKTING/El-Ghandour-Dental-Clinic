@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, Minus, Plus, X } from 'lucide-react'
 import { groupByFirstWord, subServiceName, VISIT_REASONS } from '@/lib/visit-reasons'
 import { useServices } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
@@ -18,6 +18,19 @@ export function splitReasons(value: string) {
 
 export function joinReasons(parts: string[]) {
   return parts.join(SEPARATOR)
+}
+
+const MAX_QTY = 50
+
+/** "زراعة ×3" ⇄ { name: 'زراعة', qty: 3 } */
+export function parseReason(part: string) {
+  const match = /^(.+?)\s*×\s*(\d+)$/.exec(part.trim())
+  if (!match) return { name: part.trim(), qty: 1 }
+  return { name: match[1]!.trim(), qty: Math.min(MAX_QTY, Math.max(1, Number(match[2]))) }
+}
+
+export function reasonPart(name: string, qty: number) {
+  return qty > 1 ? `${name} ×${qty}` : name
 }
 
 export function useReasonOptions(selected: string[] = []) {
@@ -49,7 +62,8 @@ export function ReasonSelect({
 }) {
   const [innerValue, setInnerValue] = useState(defaultValue)
   const value = controlledValue ?? innerValue
-  const selected = useMemo(() => splitReasons(value), [value])
+  const picked = useMemo(() => splitReasons(value).map(parseReason), [value])
+  const selected = useMemo(() => picked.map((p) => p.name), [picked])
   const options = useReasonOptions(selected)
   const { data: services = [] } = useServices()
   const priceOf = (reason: string) => services.find((s) => s.name === reason)?.price ?? 0
@@ -57,12 +71,17 @@ export function ReasonSelect({
   const groups = useMemo(() => groupByFirstWord(options, (o) => o), [options])
   const [openGroup, setOpenGroup] = useState<string | null>(null)
 
-  const toggle = (reason: string) => {
-    const next = selected.includes(reason) ? selected.filter((r) => r !== reason) : [...selected, reason]
-    const joined = joinReasons(next)
+  const commit = (next: Array<{ name: string; qty: number }>) => {
+    const joined = joinReasons(next.map((p) => reasonPart(p.name, p.qty)))
     setInnerValue(joined)
     onValueChange?.(joined)
   }
+
+  const toggle = (reason: string) =>
+    commit(selected.includes(reason) ? picked.filter((p) => p.name !== reason) : [...picked, { name: reason, qty: 1 }])
+
+  const setQty = (reason: string, qty: number) =>
+    commit(picked.map((p) => (p.name === reason ? { ...p, qty: Math.min(MAX_QTY, Math.max(1, qty)) } : p)))
 
   const rowHeight = dense ? 'min-h-12 sm:min-h-11' : 'min-h-12'
   const cardClass = (highlight: boolean) =>
@@ -166,15 +185,36 @@ export function ReasonSelect({
         })}
       </div>
 
-      {selected.length > 0 ? (
+      {picked.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-muted-foreground">اخترت:</span>
-          {selected.map((reason) => (
+          {picked.map(({ name: reason, qty }) => (
             <span
               key={reason}
               className="inline-flex items-center gap-1 rounded-full bg-primary/10 py-0.5 ps-2.5 pe-1 text-xs font-semibold text-primary"
             >
               {reason}
+              <span className="inline-flex items-center rounded-full bg-card/80" title="العدد">
+                <button
+                  type="button"
+                  onClick={() => setQty(reason, qty - 1)}
+                  disabled={qty <= 1}
+                  className="grid size-6 place-items-center rounded-full hover:bg-primary/15 disabled:opacity-35"
+                  aria-label={`قلّل عدد ${reason}`}
+                >
+                  <Minus className="size-3" />
+                </button>
+                <span className="min-w-6 text-center tabular-nums">×{qty}</span>
+                <button
+                  type="button"
+                  onClick={() => setQty(reason, qty + 1)}
+                  disabled={qty >= MAX_QTY}
+                  className="grid size-6 place-items-center rounded-full hover:bg-primary/15 disabled:opacity-35"
+                  aria-label={`زوّد عدد ${reason}`}
+                >
+                  <Plus className="size-3" />
+                </button>
+              </span>
               <button
                 type="button"
                 onClick={() => toggle(reason)}

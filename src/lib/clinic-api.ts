@@ -105,6 +105,7 @@ function mapVisit(id: string, data: DocumentData): Visit {
     notes: String(data['notes'] ?? ''),
     createdAt: Number(data['createdAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
+    oldBalance: Boolean(data['oldBalance']),
   }
 }
 
@@ -199,26 +200,88 @@ export async function createPatient(input: {
   problem?: string
   notes?: string
   doctor: DoctorId
+  oldBalance?: OldBalanceInput
 }) {
+  const db = getDb()
   const now = Date.now()
-  const registeredAt = formatArabicDate()
-  const ref = await addDoc(collection(getDb(), 'patients'), {
-    name: input.name.trim(),
+  const name = input.name.trim()
+  const ref = doc(collection(db, 'patients'))
+  const old = input.oldBalance ? checkOldBalance(input.oldBalance) : null
+  const batch = writeBatch(db)
+  batch.set(ref, {
+    name,
     phone: input.phone.trim(),
     doctor: toDoctorId(input.doctor),
     age: input.age ?? 0,
     address: input.address?.trim() ?? '',
     problem: input.problem?.trim() ?? '',
     notes: input.notes?.trim() ?? '',
-    registeredAt,
+    registeredAt: formatArabicDate(),
     lastVisit: '',
-    total: 0,
-    paid: 0,
+    total: old?.total ?? 0,
+    paid: old?.paid ?? 0,
     createdAtMs: now,
     createdAt: serverTimestamp(),
     ...stamp(),
   })
+  if (old) batch.set(doc(collection(db, 'visits')), oldBalanceVisit({ ...old, patientId: ref.id, patientName: name, now: now + 1 }))
+  await batch.commit()
   return ref.id
+}
+
+type OldBalanceInput = { label?: string; total: number; paid: number }
+
+function checkOldBalance(input: OldBalanceInput) {
+  const total = Math.round(input.total)
+  const paid = Math.round(input.paid || 0)
+  if (!Number.isFinite(total) || total <= 0) throw new Error('اكتب إجمالي الحساب القديم')
+  if (!Number.isFinite(paid) || paid < 0) throw new Error('المدفوع غير صحيح')
+  if (paid > total) throw new Error('المدفوع أكبر من الإجمالي')
+  return { label: input.label?.trim() ?? '', total, paid }
+}
+
+/** حساب من قبل السيستم — من غير مستند دفعة عشان ما يتحسبش دخل النهاردة */
+function oldBalanceVisit(input: {
+  patientId: string
+  patientName: string
+  label: string
+  total: number
+  paid: number
+  now: number
+}) {
+  return {
+    patientId: input.patientId,
+    patientName: input.patientName,
+    treatment: input.label,
+    oldBalance: true,
+    doctor: '',
+    price: input.total,
+    basePrice: input.total,
+    discountPercent: 0,
+    discountAmount: 0,
+    paidToday: input.paid,
+    notes: '',
+    date: formatArabicDate(new Date(input.now)),
+    createdAtMs: input.now,
+    createdAt: serverTimestamp(),
+    ...stamp(),
+  }
+}
+
+export async function addOldBalance(input: OldBalanceInput & { patientId: string; patientName: string }) {
+  const db = getDb()
+  const old = checkOldBalance(input)
+  const batch = writeBatch(db)
+  batch.set(
+    doc(collection(db, 'visits')),
+    oldBalanceVisit({ ...old, patientId: input.patientId, patientName: input.patientName, now: Date.now() }),
+  )
+  batch.update(doc(db, 'patients', input.patientId), {
+    ...touch(),
+    total: increment(old.total),
+    ...(old.paid > 0 ? { paid: increment(old.paid) } : {}),
+  })
+  await batch.commit()
 }
 
 /** نقل المريض لدكتور تاني — المواعيد الجاية بتتنقل معاه */

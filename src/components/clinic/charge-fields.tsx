@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field } from '@/components/clinic/ui'
 import { inputClass } from '@/components/clinic/form-layout'
-import { ReasonSelect, splitReasons } from '@/components/clinic/reason-select'
+import { parseReason, ReasonSelect, splitReasons } from '@/components/clinic/reason-select'
 import { useClinicSettings, useIsAdmin, useServices } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
 import { applyDiscount, clampPercent } from '@/lib/pricing'
@@ -15,10 +15,10 @@ export function useChargeForm(initialTreatment = '') {
   const [discount, setDiscount] = useState(0)
   const [paid, setPaid] = useState('')
 
-  /** مجموع أسعار الخدمات المختارة، وهل كلها ليها سعر ثابت */
+  /** مجموع أسعار الخدمات المختارة في عددها، وهل كلها ليها سعر ثابت */
   const priceOf = (value: string) => {
-    const parts = splitReasons(value)
-    const prices = parts.map((name) => services.find((s) => s.name === name)?.price ?? 0)
+    const parts = splitReasons(value).map(parseReason)
+    const prices = parts.map(({ name, qty }) => (services.find((s) => s.name === name)?.price ?? 0) * qty)
     return {
       total: prices.reduce((s, p) => s + p, 0),
       allFixed: parts.length > 0 && prices.every((p) => p > 0),
@@ -43,7 +43,9 @@ export function useChargeForm(initialTreatment = '') {
   const effectivePrice = isAdmin ? price : auto.total > 0 ? String(auto.total) : ''
   const unpriced = isAdmin
     ? []
-    : splitReasons(treatment).filter((name) => !(services.find((s) => s.name === name)?.price ?? 0))
+    : splitReasons(treatment)
+        .map((part) => parseReason(part).name)
+        .filter((name) => !(services.find((s) => s.name === name)?.price ?? 0))
   const charge = applyDiscount(Number(effectivePrice || 0), isAdmin ? discount : 0)
   const paidN = Number(paid || 0)
 
@@ -115,7 +117,7 @@ export function ChargeFields({
 
       <div className={cn('@container col-span-full rounded-2xl border border-border/70 bg-muted/25 p-3', panelClassName)}>
         <div className="grid grid-cols-2 gap-3 @xl:grid-cols-3">
-          <Field dense label="إجمالي السعر" {...(priceHint ? { hint: priceHint } : {})}>
+          <Field dense label="الإجمالي" {...(priceHint ? { hint: priceHint } : {})}>
             <input
               className={cn(
                 inputClass,
@@ -136,7 +138,7 @@ export function ChargeFields({
             />
           </Field>
 
-          <Field dense label="دفع">
+          <Field dense label="المدفوع">
             <div className="relative">
               <input
                 className={cn(inputClass, 'bg-card pl-20')}
@@ -144,10 +146,9 @@ export function ChargeFields({
                 type="number"
                 min="0"
                 step="1"
-                required={priceRequired}
                 value={form.paid}
                 onChange={(e) => form.setPaid(e.target.value)}
-                placeholder="0"
+                placeholder="مدفعش"
               />
               {charge.final > 0 ? (
                 <button
@@ -162,7 +163,7 @@ export function ChargeFields({
           </Field>
 
           <Stat
-            label="لسه عليه"
+            label="الباقي"
             className="col-span-2 @xl:col-span-1"
             tone={form.remaining > 0 ? 'text-warning' : 'text-success'}
           >

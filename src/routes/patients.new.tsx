@@ -6,6 +6,7 @@ import { errorText } from '@/lib/api-errors'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, areaClass, inputClass } from '@/components/clinic/form-layout'
 import { ReasonSelect } from '@/components/clinic/reason-select'
+import { OldBalanceFields, useOldBalanceForm } from '@/components/clinic/old-balance'
 import { useCreatePatient, useMyDoctor } from '@/lib/clinic-hooks'
 import type { DoctorId } from '@/lib/doctors'
 import { DoctorPicker } from '@/components/clinic/doctors'
@@ -31,12 +32,18 @@ function AddPatient() {
   const [saving, setSaving] = useState(false)
   const myDoctor = useMyDoctor()
   const [doctor, setDoctor] = useState<DoctorId | ''>(myDoctor ?? '')
+  const [hasOld, setHasOld] = useState(false)
+  const old = useOldBalanceForm()
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (saving) return
     if (!doctor) {
       toast.error('اختار المريض تبع مين — د. أشرف ولا د. هبة')
+      return
+    }
+    if (hasOld && old.error) {
+      toast.error(old.error)
       return
     }
     const data = new FormData(e.currentTarget)
@@ -50,6 +57,7 @@ function AddPatient() {
         problem: String(data.get('problem') ?? ''),
         notes: String(data.get('notes') ?? ''),
         doctor,
+        ...(hasOld ? { oldBalance: { label: old.label, total: old.totalN, paid: old.paidN } } : {}),
       })
       toast.success('تم إضافة المريض بنجاح ✅')
       void nav({ to: '/patients/$patientId', params: { patientId: id } })
@@ -95,6 +103,18 @@ function AddPatient() {
         <Field dense label="العنوان">
           <input className={inputClass} name="address" placeholder="المنطقة والعنوان" />
         </Field>
+        <div className="grid gap-2.5 rounded-xl border border-border/70 bg-muted/25 p-3 sm:col-span-2">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={hasOld}
+              onChange={(e) => setHasOld(e.target.checked)}
+            />
+            عنده حساب قديم من قبل السيستم
+          </label>
+          {hasOld ? <OldBalanceFields form={old} /> : null}
+        </div>
       </div>
 
       <Field
