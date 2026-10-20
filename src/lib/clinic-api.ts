@@ -377,9 +377,10 @@ function visitWrites(
   const charge = applyDiscount(input.basePrice, input.discountPercent)
   const paid = Math.max(0, Math.min(Math.round(input.paidToday || 0), charge.final))
   const treatment = input.treatment.trim()
+  const visitRef = doc(collection(db, 'visits'))
   const writes: Array<[DocumentReference, DocumentData]> = [
     [
-      doc(collection(db, 'visits')),
+      visitRef,
       {
         patientId: input.patientId,
         patientName: input.patientName,
@@ -408,6 +409,7 @@ function visitWrites(
         kind: treatment === NEW_PATIENT_FEE_NAME ? 'كشف' : 'علاج',
         doctor: input.doctorId,
         now: input.now,
+        visitId: visitRef.id,
       }),
     ])
   }
@@ -423,11 +425,14 @@ function paymentDoc(input: {
   doctor: DoctorId
   method?: string
   note?: string
+  /** الزيارة اللي الدفعة اتدفعت معاها — عشان لو العلاج اتمسح تتمسح معاه */
+  visitId?: string
 }) {
   return {
     patientId: input.patientId,
     patient: input.patientName,
     doctor: input.doctor,
+    ...(input.visitId ? { visitId: input.visitId } : {}),
     amount: input.amount,
     date: formatArabicDateTime(new Date(input.now)),
     method: input.method ?? 'نقدي',
@@ -494,6 +499,100 @@ export async function createPayment(input: {
   })
 
   return { remaining, amount: paidAmount }
+}
+
+/** تصحيح غلطة: بيمسح العلاج والدفعة اللي اتدفعت معاه وبينقّص حساب المريض */
+export async function deleteVisit(visitId: string) {
+  const db = getDb()
+  const visitRef = doc(db, 'visits', visitId)
+  const first = await getDoc(visitRef)
+  if (!first.exists()) throw new Error('العلاج ده اتمسح قبل كده')
+  const patientId = String(first.data()['patientId'] ?? '')
+  const payments = await getDocs(query(collection(db, 'payments'), where('patientId', '==', patientId)))
+
+  await runTransaction(db, async (tx) => {
+    const visitSnap = await tx.get(visitRef)
+    if (!visitSnap.exists()) throw new Error('العلاج ده اتمسح قبل كده')
+    const patientRef = doc(db, 'patients', patientId)
+    const patientSnap = await tx.get(patientRef)
+    const v = visitSnap.data()
+    const price = Number(v['price'] ?? 0)
+    const paid = Number(v['paidToday'] ?? 0)
+    const at = Number(v['createdAtMs'] ?? 0)
+    const linked = payments.docs.find((d) => {
+      const x = d.data()
+      if (x['visitId']) return x['visitId'] === visitId
+      return x['kind'] !== 'دفعة' && Number(x['createdAtMs'] ?? 0) === at && Number(x['amount'] ?? 0) === paid
+    })
+
+    tx.delete(visitRef)
+    if (linked) tx.delete(linked.ref)
+    if (patientSnap.exists()) {
+      const patient = mapPatient(patientSnap.id, patientSnap.data())
+      tx.update(patientRef, {
+        ...touch(),
+        total: Math.max(0, patient.total - price),
+        paid: Math.max(0, patient.paid - paid),
+      })
+    }
+  })
+  return { patientId }
+}
+
+/** تصحيح غلطة: بيمسح دفعة من الباقي وبيرجّعها على المريض */
+export async function deletePayment(paymentId: string) {
+  const db = getDb()
+  let patientId = ''
+  await runTransaction(db, async (tx) => {
+    const paymentRef = doc(db, 'payments', paymentId)
+    const paymentSnap = await tx.get(paymentRef)
+    if (!paymentSnap.exists()) throw new Error('الدفعة دي اتمسحت قبل كده')
+    const x = paymentSnap.data()
+    if (paymentKindOf(x['kind']) !== 'دفعة') throw new Error('الدفعة دي متسجلة مع علاج — امسح العلاج نفسه')
+    patientId = String(x['patientId'] ?? '')
+    const patientRef = doc(db, 'patients', patientId)
+    const patientSnap = await tx.get(patientRef)
+    tx.delete(paymentRef)
+    if (patientSnap.exists()) {
+      const patient = mapPatient(patientSnap.id, patientSnap.data())
+      tx.update(patientRef, { ...touch(), paid: Math.max(0, patient.paid - Number(x['amount'] ?? 0)) })
+    }
+  })
+  return { patientId }
+}
+
+export async function updatePatient(input: {
+  id: string
+  name: string
+  phone: string
+  age?: number
+  address?: string
+  notes?: string
+}) {
+  const name = input.name.trim()
+  const phone = input.phone.trim()
+  if (!name) throw new Error('اكتب اسم المريض')
+  if (!phone) throw new Error('اكتب رقم الموبايل')
+  const db = getDb()
+  const patientRef = doc(db, 'patients', input.id)
+  const [queue, appointments, payments] = await Promise.all(
+    ['queue', 'appointments', 'payments'].map((col) =>
+      getDocs(query(collection(db, col), where('patientId', '==', input.id))),
+    ),
+  )
+  const batch = writeBatch(db)
+  batch.update(patientRef, {
+    ...touch(),
+    name,
+    phone,
+    age: input.age ?? 0,
+    address: input.address?.trim() ?? '',
+    notes: input.notes?.trim() ?? '',
+  })
+  for (const d of queue!.docs) batch.update(d.ref, { patientName: name, phone })
+  for (const d of appointments!.docs) batch.update(d.ref, { patientName: name, phone })
+  for (const d of payments!.docs) batch.update(d.ref, { patient: name })
+  await batch.commit()
 }
 
 /** الباقي عند المرضى كلهم — مجموع من السيرفر من غير ما نقرا كل المرضى */

@@ -12,7 +12,10 @@ import {
   createAppointment,
   deleteExpense,
   deletePatient,
+  deletePayment,
   deleteService,
+  deleteVisit,
+  updatePatient,
   getPatient,
   getOutstandingTotal,
   getPaymentsTotal,
@@ -270,6 +273,34 @@ export function useCreateVisit() {
   return useMutation({
     mutationFn: createVisit,
     onSuccess: (_, input) => refreshClinicData(qc, input.patientId),
+  })
+}
+
+export function useDeleteVisit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deleteVisit,
+    onSuccess: ({ patientId }) => refreshClinicData(qc, patientId),
+  })
+}
+
+export function useDeletePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deletePayment,
+    onSuccess: ({ patientId }) => refreshClinicData(qc, patientId),
+  })
+}
+
+export function useUpdatePatient() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: updatePatient,
+    onSuccess: async (_, input) => {
+      refreshClinicData(qc, input.id)
+      await qc.invalidateQueries({ queryKey: ['patients'] })
+      await qc.invalidateQueries({ queryKey: ['queue'] })
+    },
   })
 }
 

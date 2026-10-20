@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   MapPin,
   NotebookPen,
+  Pencil,
   Phone,
   Stethoscope,
   Trash2,
@@ -20,13 +21,13 @@ import {
   useCreatePayment,
   useCreateVisit,
   useDeletePatient,
-  useIsAdmin,
   usePatient,
   usePatientAppointments,
   usePatientPayments,
   usePatientVisits,
   useSetPatientDoctor,
   useTodayQueue,
+  useUpdatePatient,
 } from '@/lib/clinic-hooks'
 import { DOCTORS } from '@/lib/doctors'
 import { DoctorBadge } from '@/components/clinic/doctors'
@@ -39,7 +40,7 @@ import {
 import { PageSurface } from '@/components/clinic/app-shell'
 import { EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
-import { inputClass } from '@/components/clinic/form-layout'
+import { areaClass, inputClass } from '@/components/clinic/form-layout'
 import { ToothIcon } from '@/components/clinic/dental-icons'
 import { OldBalanceDialog } from '@/components/clinic/old-balance'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
@@ -191,7 +192,6 @@ function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] })
 }
 
 function ProfileHeader({ patient: p }: { patient: Patient }) {
-  const isAdmin = useIsAdmin()
   const initials = p.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join(' ')
 
   return (
@@ -255,7 +255,8 @@ function ProfileHeader({ patient: p }: { patient: Patient }) {
               <span className="max-sm:hidden">المرضى</span>
             </Link>
           </Button>
-          {isAdmin ? <DeletePatient id={p.id} name={p.name} /> : null}
+          <EditPatient patient={p} />
+          <DeletePatient id={p.id} name={p.name} />
         </div>
       </div>
     </section>
@@ -490,7 +491,7 @@ function PatientHistory({
         ) : null}
       </div>
       <div className="pe-1">
-        <PatientTimeline patient={patient} />
+        <PatientTimeline patient={patient} editable />
       </div>
     </div>
   )
@@ -619,6 +620,80 @@ function QuickCollect({
         </Button>
       </div>
     </form>
+  )
+}
+
+function EditPatient({ patient: p }: { patient: Patient }) {
+  const [open, setOpen] = useState(false)
+  const save = useUpdatePatient()
+
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const data = new FormData(e.currentTarget)
+    try {
+      await save.mutateAsync({
+        id: p.id,
+        name: String(data.get('name') ?? ''),
+        phone: String(data.get('phone') ?? ''),
+        age: Number(data.get('age') || 0),
+        address: String(data.get('address') ?? ''),
+        notes: String(data.get('notes') ?? ''),
+      })
+      toast.success('اتعدلت بيانات المريض ✅')
+      setOpen(false)
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" className="size-10 rounded-xl px-0 text-muted-foreground" aria-label="تعديل بيانات المريض">
+          <Pencil className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent dir="rtl" className="rounded-3xl">
+        <DialogHeader className="text-right">
+          <DialogTitle>تعديل بيانات {p.name}</DialogTitle>
+          <DialogDescription>
+            لو في علاج أو دفعة اتسجلت غلط، امسحها من «السجل» وسجلها تاني صح.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="grid grid-cols-2 gap-2.5">
+          <label className="col-span-2 grid gap-1 text-sm font-semibold">
+            الاسم
+            <input className={inputClass} name="name" required defaultValue={p.name} />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold">
+            الموبايل
+            <input className={inputClass} name="phone" required dir="ltr" inputMode="tel" defaultValue={p.phone} />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold">
+            السن
+            <input className={inputClass} name="age" type="number" min="0" defaultValue={p.age || ''} />
+          </label>
+          <label className="col-span-2 grid gap-1 text-sm font-semibold">
+            العنوان
+            <input className={inputClass} name="address" defaultValue={p.address} />
+          </label>
+          <label className="col-span-2 grid gap-1 text-sm font-semibold">
+            ملاحظات
+            <textarea className={cn(areaClass, 'min-h-20')} name="notes" defaultValue={p.notes ?? ''} />
+          </label>
+          <DialogFooter className="col-span-2 gap-2 sm:flex-row-reverse">
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending ? 'جاري الحفظ...' : 'حفظ التعديل'}
+            </Button>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                إلغاء
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

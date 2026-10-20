@@ -1,8 +1,26 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { CalendarCheck, CalendarPlus, CalendarX, CheckCircle2, ChevronDown, Stethoscope, UserPlus, Wallet } from 'lucide-react'
+import {
+  CalendarCheck,
+  CalendarPlus,
+  CalendarX,
+  CheckCircle2,
+  ChevronDown,
+  Stethoscope,
+  Trash2,
+  UserPlus,
+  Wallet,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import { splitReasons } from '@/components/clinic/reason-select'
+import { errorText } from '@/lib/api-errors'
 import { actorLabel } from '@/lib/auth-context'
-import { usePatientAppointments, usePatientPayments, usePatientVisits } from '@/lib/clinic-hooks'
+import {
+  useDeletePayment,
+  useDeleteVisit,
+  usePatientAppointments,
+  usePatientPayments,
+  usePatientVisits,
+} from '@/lib/clinic-hooks'
 import { formatArabicWeekday, groupByDay, money, parseDayKey, timeLabel } from '@/lib/format'
 import { NEW_PATIENT_FEE_NAME, patientBalance } from '@/lib/pricing'
 import { cn } from '@/lib/utils'
@@ -24,9 +42,19 @@ type TimelineEvent = {
   by?: string | undefined
   fallbackDate?: string | undefined
   highlight?: boolean | undefined
+  /** لتصحيح الغلط — بيمسح العلاج أو الدفعة ويظبط الحساب */
+  remove?: { kind: 'visit' | 'payment'; id: string } | undefined
 }
 
-export function PatientTimeline({ patient, limit = 0 }: { patient: Patient; limit?: number }) {
+export function PatientTimeline({
+  patient,
+  limit = 0,
+  editable = false,
+}: {
+  patient: Patient
+  limit?: number
+  editable?: boolean
+}) {
   const { data: visits = [], isLoading: visitsLoading } = usePatientVisits(patient.id)
   const { data: payments = [], isLoading: paymentsLoading } = usePatientPayments(patient.id)
   const { data: appointments = [] } = usePatientAppointments(patient.id)
@@ -83,6 +111,7 @@ export function PatientTimeline({ patient, limit = 0 }: { patient: Patient; limi
                   ) : null}
                   <p className="text-[11px] text-muted-foreground">{e.at ? timeLabel(e.at) : ''}</p>
                 </div>
+                {editable && e.remove ? <RemoveEntry entry={e.remove} title={e.title} amount={e.amount} /> : null}
               </li>
             ))}
           </ul>
@@ -99,6 +128,49 @@ export function PatientTimeline({ patient, limit = 0 }: { patient: Patient; limi
         </button>
       ) : null}
     </div>
+  )
+}
+
+function RemoveEntry({
+  entry,
+  title,
+  amount,
+}: {
+  entry: NonNullable<TimelineEvent['remove']>
+  title: string
+  amount?: string | undefined
+}) {
+  const removeVisit = useDeleteVisit()
+  const removePayment = useDeletePayment()
+  const busy = removeVisit.isPending || removePayment.isPending
+
+  const remove = async () => {
+    const what = entry.kind === 'visit' ? `«${title}»${amount ? ` (${amount})` : ''}` : `دفعة ${amount ?? ''}`
+    const effect =
+      entry.kind === 'visit'
+        ? 'سعره هيتشال من حساب المريض، ولو كان دفع معاه الدفعة هتتمسح كمان.'
+        : 'المبلغ هيرجع تاني على المريض.'
+    if (!window.confirm(`تمسح ${what}؟\n${effect}`)) return
+    try {
+      if (entry.kind === 'visit') await removeVisit.mutateAsync(entry.id)
+      else await removePayment.mutateAsync(entry.id)
+      toast.success('اتمسح واتظبط الحساب ✅')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء المسح'))
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void remove()}
+      disabled={busy}
+      className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-rose-50 hover:text-destructive disabled:opacity-40"
+      aria-label={`مسح ${title}`}
+      title="مسح (لو اتسجل غلط)"
+    >
+      <Trash2 className="size-4" />
+    </button>
   )
 }
 
@@ -161,6 +233,7 @@ function buildEvents(
         amount: v.price > 0 ? money(v.price) : undefined,
         by: v.by,
         fallbackDate: v.date,
+        remove: { kind: 'visit', id: v.id },
       },
     })
   }
@@ -180,6 +253,7 @@ function buildEvents(
         amountTone: 'text-success',
         by: x.by,
         fallbackDate: x.date,
+        remove: { kind: 'payment', id: x.id },
       },
     })
   }
