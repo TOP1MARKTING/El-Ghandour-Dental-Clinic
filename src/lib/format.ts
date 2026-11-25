@@ -83,6 +83,13 @@ export function dayKey(date = new Date()) {
   return `${y}-${m}-${d}`
 }
 
+/** مفتاح الشهر للنسخة الاحتياطية: 2026-11 */
+export function monthKey(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
 /** عكس dayKey — بيرجع نص الليل بالتوقيت المحلي */
 export function parseDayKey(key: string) {
   const [y, m, d] = key.split('-').map(Number)

@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { CalendarDays, CalendarPlus } from 'lucide-react'
 import { PageSurface } from '@/components/clinic/app-shell'
-import { EmptyState, LoadingSkeleton, PageHeader } from '@/components/clinic/ui'
+import { EmptyState, LoadingSkeleton, PageHeader, SearchBar } from '@/components/clinic/ui'
 import {
   AppointmentForm,
   AppointmentRow,
@@ -37,26 +37,33 @@ export const Route = createFileRoute('/appointments')({
 function Appointments() {
   const { data: appointments = [], isLoading, isError, error, refetch } = useUpcomingAppointments()
   const [adding, setAdding] = useState(false)
+  const [q, setQ] = useState('')
+  const term = useDeferredValue(q.trim())
   const myDoctor = useMyDoctor()
   const [doctorFilter, setDoctorFilter] = useState<DoctorFilterValue>('all')
+
+  const filtered = useMemo(() => {
+    return appointments.filter((a) => {
+      if (doctorFilter !== 'all' && a.doctor !== doctorFilter) return false
+      if (!term) return true
+      return [a.patientName, a.phone, a.note ?? ''].some((field) => field.includes(term))
+    })
+  }, [appointments, doctorFilter, term])
 
   const groups = useMemo(() => {
     const today = dayKey()
     const map = new Map<string, ClinicAppointment[]>()
-    for (const a of appointments) {
+    for (const a of filtered) {
       if (a.status === 'cancelled') continue
       if (a.status === 'arrived' && a.date !== today) continue
-      if (doctorFilter !== 'all' && a.doctor !== doctorFilter) continue
       const list = map.get(a.date) ?? []
       list.push(a)
       map.set(a.date, list)
     }
     return [...map.entries()].map(([date, list]) => [date, mineFirst(list, (a) => a.doctor, myDoctor)] as const)
-  }, [appointments, doctorFilter, myDoctor])
+  }, [filtered, myDoctor])
 
-  const upcoming = appointments.filter(
-    (a) => a.status === 'upcoming' && (doctorFilter === 'all' || a.doctor === doctorFilter),
-  )
+  const upcoming = filtered.filter((a) => a.status === 'upcoming')
   const nearest = upcoming[0] ? (daysUntilLabel(upcoming[0].date) ?? formatAppointmentDay(upcoming[0].date)) : ''
   const summary = upcoming.length
     ? `${upcoming.length} ${upcoming.length === 1 ? 'موعد جاي' : 'مواعيد جاية'} · أقربهم ${nearest}`
@@ -85,7 +92,12 @@ function Appointments() {
         }
       />
 
-      <DoctorFilter value={doctorFilter} onChange={setDoctorFilter} className="mb-3 self-start max-sm:self-stretch" />
+      <div className="mb-3 grid gap-2 sm:flex sm:items-center">
+        <div className="min-w-0 flex-1">
+          <SearchBar value={q} onChange={setQ} placeholder="ابحث باسم المريض أو رقم الموبايل" />
+        </div>
+        <DoctorFilter value={doctorFilter} onChange={setDoctorFilter} className="sm:h-12 sm:items-center" />
+      </div>
 
       <div className="min-h-0 flex-1 overflow-auto pe-1">
         {isLoading ? (
@@ -99,12 +111,20 @@ function Appointments() {
         ) : groups.length === 0 ? (
           <EmptyState
             icon={<CalendarDays />}
-            title={doctorFilter === 'all' ? 'مفيش مواعيد جاية' : `مفيش مواعيد جاية لـ ${doctorById(doctorFilter).short}`}
+            title={
+              term
+                ? 'مفيش نتيجة للبحث'
+                : doctorFilter === 'all'
+                  ? 'مفيش مواعيد جاية'
+                  : `مفيش مواعيد جاية لـ ${doctorById(doctorFilter).short}`
+            }
             action={
-              <Button onClick={() => setAdding(true)}>
-                <CalendarPlus className="size-4" />
-                احجز موعد
-              </Button>
+              term ? undefined : (
+                <Button onClick={() => setAdding(true)}>
+                  <CalendarPlus className="size-4" />
+                  احجز موعد
+                </Button>
+              )
             }
           />
         ) : (

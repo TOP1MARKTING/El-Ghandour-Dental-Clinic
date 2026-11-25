@@ -23,7 +23,12 @@ import { addDays, dayKey, formatArabicWeekday, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
+import { getStoredNurse, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 import type { ClinicAppointment } from '@/types'
+
+function nurseForQuickCheckIn(nurses: string[]) {
+  return requireNurseName(getStoredNurse(), nurses)
+}
 
 function keyAfter(days: number) {
   return dayKey(addDays(new Date(), days))
@@ -288,6 +293,7 @@ export function AppointmentCheckRow({ appointment: a }: { appointment: ClinicApp
   const checkIn = useCheckInFollowup()
   const update = useUpdateAppointmentStatus()
   const undo = useUndoAppointmentArrival()
+  const { nurses } = useSelectedNurse()
   const arrived = a.status === 'arrived'
   const busy = checkIn.isPending || update.isPending || undo.isPending
 
@@ -299,8 +305,13 @@ export function AppointmentCheckRow({ appointment: a }: { appointment: ClinicApp
         toast.success(`اتشالت علامة الحضور من ${a.patientName}`)
         return
       }
+      const nurse = nurseForQuickCheckIn(nurses)
+      if (!nurse.ok) {
+        toast.error(nurse.error)
+        return
+      }
       try {
-        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor })
+        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor, byName: nurse.name })
       } catch (err) {
         if (!(err instanceof Error && err.message === ALREADY_HERE_ERROR)) throw err
         await update.mutateAsync({ id: a.id, status: 'arrived' })
@@ -407,14 +418,20 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
   const nav = useNavigate()
   const checkIn = useCheckInFollowup()
   const update = useUpdateAppointmentStatus()
+  const { nurses } = useSelectedNurse()
   const isToday = a.date === dayKey()
   const done = a.status !== 'upcoming'
   const busy = checkIn.isPending || update.isPending
 
   const arrived = async () => {
     try {
+      const nurse = nurseForQuickCheckIn(nurses)
+      if (!nurse.ok) {
+        toast.error(nurse.error)
+        return
+      }
       try {
-        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor })
+        await checkIn.mutateAsync({ patientId: a.patientId, doctor: a.doctor, byName: nurse.name })
       } catch (err) {
         if (!(err instanceof Error && err.message === ALREADY_HERE_ERROR)) throw err
         await update.mutateAsync({ id: a.id, status: 'arrived' })

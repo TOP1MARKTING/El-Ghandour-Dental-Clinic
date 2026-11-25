@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppointmentsRouteImport } from './routes/appointments'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NursesRouteImport } from './routes/nurses'
 import { Route as PatientsRouteImport } from './routes/patients'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as ServicesRouteImport } from './routes/services'
@@ -43,6 +44,11 @@ const FinanceRoute = FinanceRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NursesRoute = NursesRouteImport.update({
+  id: '/nurses',
+  path: '/nurses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PatientsRoute = PatientsRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
   '/login': typeof LoginRoute
+  '/nurses': typeof NursesRoute
   '/patients': typeof PatientsRouteWithChildren
   '/payments': typeof PaymentsRouteWithChildren
   '/services': typeof ServicesRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
   '/login': typeof LoginRoute
+  '/nurses': typeof NursesRoute
   '/services': typeof ServicesRoute
   '/check-in/followup': typeof CheckInFollowupRoute
   '/check-in/new': typeof CheckInNewRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
   '/login': typeof LoginRoute
+  '/nurses': typeof NursesRoute
   '/patients': typeof PatientsRouteWithChildren
   '/payments': typeof PaymentsRouteWithChildren
   '/services': typeof ServicesRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/appointments'
     | '/finance'
     | '/login'
+    | '/nurses'
     | '/patients'
     | '/payments'
     | '/services'
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/appointments'
     | '/finance'
     | '/login'
+    | '/nurses'
     | '/services'
     | '/check-in/followup'
     | '/check-in/new'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/appointments'
     | '/finance'
     | '/login'
+    | '/nurses'
     | '/patients'
     | '/payments'
     | '/services'
@@ -206,6 +218,7 @@ export interface RootRouteChildren {
   AppointmentsRoute: typeof AppointmentsRoute
   FinanceRoute: typeof FinanceRoute
   LoginRoute: typeof LoginRoute
+  NursesRoute: typeof NursesRoute
   PatientsRoute: typeof PatientsRouteWithChildren
   PaymentsRoute: typeof PaymentsRouteWithChildren
   ServicesRoute: typeof ServicesRoute
@@ -241,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nurses': {
+      id: '/nurses'
+      path: '/nurses'
+      fullPath: '/nurses'
+      preLoaderRoute: typeof NursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/patients': {
@@ -369,6 +389,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppointmentsRoute: AppointmentsRoute,
   FinanceRoute: FinanceRoute,
   LoginRoute: LoginRoute,
+  NursesRoute: NursesRoute,
   PatientsRoute: PatientsRouteWithChildren,
   PaymentsRoute: PaymentsRouteWithChildren,
   ServicesRoute: ServicesRoute,

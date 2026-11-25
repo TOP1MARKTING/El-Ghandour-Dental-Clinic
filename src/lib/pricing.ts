@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS: ClinicSettings = {
   newPatientFee: 150,
   discountPresets: [0, 10, 20],
   expenseCategories: ['معمل', 'كهربا', 'إيجار', 'مرتبات', 'خامات وأدوات', 'مياه ونت', 'صيانة', 'أخرى'],
+  nurses: [],
 }
 
 export function clampPercent(value: number) {

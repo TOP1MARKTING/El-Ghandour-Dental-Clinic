@@ -14,10 +14,21 @@ import { money } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorPicker } from '@/components/clinic/doctors'
+import { NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 import { cn } from '@/lib/utils'
 import type { Patient } from '@/types'
 
+type FollowupSearch = { patient?: string; checkup?: boolean }
+
 export const Route = createFileRoute('/check-in/followup')({
+  validateSearch: (s: Record<string, unknown>): FollowupSearch => {
+    const patient = typeof s['patient'] === 'string' ? s['patient'] : undefined
+    const checkup = s['checkup'] === true || s['checkup'] === 'true' || s['checkup'] === 1
+    return {
+      ...(patient ? { patient } : {}),
+      ...(checkup ? { checkup: true } : {}),
+    }
+  },
   head: () => ({
     meta: [
       { title: 'متابعة مريض — عيادة الغندور' },
@@ -32,14 +43,16 @@ export const Route = createFileRoute('/check-in/followup')({
 })
 
 function CheckInFollowup() {
+  const { patient: initialPatient, checkup } = Route.useSearch()
   const nav = useNavigate()
   const checkIn = useCheckInFollowup()
   const { data: patients = [] } = usePatients()
-  const [patientId, setPatientId] = useState('')
+  const [patientId, setPatientId] = useState(initialPatient ?? '')
   const [oldPaid, setOldPaid] = useState('')
-  const [showNew, setShowNew] = useState(false)
+  const [showNew, setShowNew] = useState(Boolean(checkup))
   const [saving, setSaving] = useState(false)
   const [doctor, setDoctor] = useState<DoctorId | ''>('')
+  const nursePick = useSelectedNurse()
   const form = useChargeForm()
 
   const selected = useMemo(() => patients.find((p) => p.id === patientId) ?? null, [patients, patientId])
@@ -56,10 +69,21 @@ function CheckInFollowup() {
   }
 
   useEffect(() => {
+    if (initialPatient) setPatientId(initialPatient)
+  }, [initialPatient])
+
+  useEffect(() => {
     setOldPaid('')
-    toggleNew(false)
+    if (!checkup) toggleNew(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId])
+
+  useEffect(() => {
+    if (!checkup || !patientId) return
+    setShowNew(true)
+    form.setTreatment('كشف')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkup, patientId])
 
   useEffect(() => {
     setDoctor(selectedDoctor ?? '')
@@ -88,13 +112,19 @@ function CheckInFollowup() {
       return
     }
     if (oldPaidN < 0 || oldPaidN > oldRemaining) {
-      toast.error('المدفوع من القديم أكبر من اللي عليه')
+      toast.error('المدفوع من الحساب القديم أكبر من اللي عليه')
+      return
+    }
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
       return
     }
     setSaving(true)
     try {
       await checkIn.mutateAsync({
         patientId,
+        byName: nurse.name,
         ...(doctor ? { doctor } : {}),
         ...(reason ? { reason, isNewTreatment: true } : {}),
         ...(charge.base > 0
@@ -123,10 +153,17 @@ function CheckInFollowup() {
       title="متابعة مريض"
       description="اختار المريض — هتشوف عمل إيه قبل كده وعليه كام"
       submitLabel={saving ? 'جاري التسجيل...' : 'تسجيل الحضور وإعطاء رقم'}
-      submitDisabled={saving}
+      submitDisabled={saving || !nursePick.ready}
       onSubmit={submit}
       wide={!!selected}
     >
+      <NursePicker
+        value={nursePick.nurse}
+        onChange={nursePick.setNurse}
+        nurses={nursePick.nurses}
+        className="col-span-full"
+      />
+
       <Field dense label="المريض" className="col-span-full">
         <PatientSearchPicker value={patientId} onChange={setPatientId} required minimal />
       </Field>
@@ -179,8 +216,17 @@ function CheckInFollowup() {
           </div>
 
           <section className="col-span-full rounded-2xl border border-border/70 bg-muted/25 p-3 lg:col-span-1 lg:self-start">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">سجل المريض — آخر اللي حصل</p>
-            <PatientTimeline patient={selected} limit={3} />
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-muted-foreground">سجل المريض — نفس اللي عند الدكتور</p>
+              <Link
+                to="/patients/$patientId"
+                params={{ patientId: selected.id }}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                السجل كامل
+              </Link>
+            </div>
+            <PatientTimeline patient={selected} />
           </section>
         </>
       ) : null}

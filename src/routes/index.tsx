@@ -18,6 +18,7 @@ import { DOCTORS, mineFirst } from '@/lib/doctors'
 import { DoctorBadge } from '@/components/clinic/doctors'
 import { formatArabicWeekday, money, parseDayKey } from '@/lib/format'
 import { AppointmentCheckRow, AppointmentForm, formatAppointmentDay } from '@/components/clinic/appointments'
+import { BackupStatusCard } from '@/components/clinic/backup-gate'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { apiErrorMessage } from '@/lib/api-errors'
 import type { ClinicAppointment, QueueEntry } from '@/types'
@@ -152,6 +153,10 @@ function DoctorHome() {
   return (
     <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
       <HomeHeader />
+
+      <div className="mb-3 shrink-0">
+        <BackupStatusCard />
+      </div>
 
       <div className="mb-3 grid shrink-0 grid-cols-2 gap-2.5 lg:grid-cols-3">
         <HomeStat

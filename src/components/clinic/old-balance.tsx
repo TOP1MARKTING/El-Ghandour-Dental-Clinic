@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 import { errorText } from '@/lib/api-errors'
 import { useAddOldBalance } from '@/lib/clinic-hooks'
 import { money } from '@/lib/format'
@@ -94,14 +95,27 @@ export function OldBalanceDialog({ patientId, patientName }: { patientId: string
   const [open, setOpen] = useState(false)
   const add = useAddOldBalance()
   const form = useOldBalanceForm()
+  const nursePick = useSelectedNurse()
 
   const save = async () => {
     if (form.error) {
       toast.error(form.error)
       return
     }
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
+      return
+    }
     try {
-      await add.mutateAsync({ patientId, patientName, label: form.label, total: form.totalN, paid: form.paidN })
+      await add.mutateAsync({
+        patientId,
+        patientName,
+        label: form.label,
+        total: form.totalN,
+        paid: form.paidN,
+        byName: nurse.name,
+      })
       toast.success(`اتسجل الحساب القديم · الباقي ${money(form.remaining)}`)
       form.reset()
       setOpen(false)
@@ -125,9 +139,10 @@ export function OldBalanceDialog({ patientId, patientName }: { patientId: string
             حساب من قبل السيستم، زي تقويم بأسعار قديمة. بيتزود على حسابه، ومش بيتحسب في فلوس النهاردة.
           </DialogDescription>
         </DialogHeader>
+        <NursePicker value={nursePick.nurse} onChange={nursePick.setNurse} nurses={nursePick.nurses} />
         <OldBalanceFields form={form} />
         <DialogFooter className="gap-2 sm:flex-row-reverse">
-          <Button onClick={() => void save()} disabled={add.isPending}>
+          <Button onClick={() => void save()} disabled={add.isPending || !nursePick.ready}>
             {add.isPending ? 'جاري الحفظ...' : 'حفظ الحساب القديم'}
           </Button>
           <DialogClose asChild>

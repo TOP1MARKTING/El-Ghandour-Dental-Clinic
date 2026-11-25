@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { roleLabel, useAuth } from '@/lib/auth-context'
+import { BackupGate } from '@/components/clinic/backup-gate'
 import {
   ClinicHomeIcon,
   ClinicPayIcon,
@@ -48,6 +49,12 @@ const adminItems = [
     icon: ServicesIcon,
     match: (path: string) => path.startsWith('/services'),
   },
+  {
+    to: '/nurses' as const,
+    label: 'الممرضات',
+    icon: PatientFileIcon,
+    match: (path: string) => path.startsWith('/nurses'),
+  },
 ]
 
 function BootScreen() {
@@ -89,7 +96,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (loading || !user) return <BootScreen />
 
   const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
-  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services'].includes(path)
+  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services', '/nurses'].includes(path)
   const profilePage = /^\/patients\/[^/]+$/.test(path) && !formPage
   const fitHeight = formPage || listPage || profilePage
   const initial = user.name.replace(/^د\.\s*/, '').trim().charAt(0) || 'د'
@@ -107,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 
   return (
+    <BackupGate>
     <div dir="rtl" className="app-shell bg-scene text-foreground max-lg:flex max-lg:h-dvh max-lg:flex-col max-lg:overflow-hidden lg:min-h-dvh lg:overflow-x-clip">
       {/* Mobile top bar — full bleed like a native app */}
       <header className="app-topbar surface-ink sticky top-0 z-30 shrink-0 pt-[env(safe-area-inset-top)] text-white shadow-clinic lg:hidden">
@@ -226,6 +234,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
     </div>
+    </BackupGate>
   )
 }
 

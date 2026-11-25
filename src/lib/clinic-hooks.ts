@@ -32,12 +32,15 @@ import {
   updateAppointmentStatus,
   updateServicePrice,
   getClinicSettings,
+  getBackupForMonth,
+  getLatestBackup,
+  downloadClinicBackup,
   saveClinicSettings,
   setPatientDoctor,
   undoAppointmentArrival,
 } from '@/lib/clinic-api'
 import { useAuth } from '@/lib/auth-context'
-import { addDays, dayKey, startOfDay } from '@/lib/format'
+import { addDays, dayKey, monthKey, startOfDay } from '@/lib/format'
 import { DEFAULT_SETTINGS } from '@/lib/pricing'
 import type { AppointmentStatus, QueueEntry } from '@/types'
 
@@ -141,6 +144,9 @@ export function useDeleteExpense() {
   })
 }
 
+/** بيانات الحالات بتتزامن بين الدكتور والممرضات كل شوية + مع كل تركيز على الصفحة */
+const CLINIC_SYNC = { staleTime: 10_000, refetchInterval: 20_000, refetchOnWindowFocus: true as const }
+
 export function usePatients() {
   const ready = useClinicReady()
   const query = useQuery({
@@ -148,6 +154,7 @@ export function usePatients() {
     queryFn: listPatients,
     enabled: ready,
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
@@ -159,6 +166,7 @@ export function usePatient(id: string) {
     queryFn: () => getPatient(id),
     enabled: ready && Boolean(id),
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
@@ -170,11 +178,12 @@ export function usePatientVisits(patientId: string) {
     queryFn: () => listVisitsForPatient(patientId),
     enabled: ready && Boolean(patientId),
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
 
-/** sinceMs: من أول الفترة — من غيره بيجيب كل الدفعات */
+/** sinceMs: من أول الفترة — من غيره بيجيب كل الدفعات (للدكتور بس — عشان الدخل ما يبانش للاستقبال) */
 export function usePayments(sinceMs?: number, enabled = true) {
   const ready = useClinicReady()
   const admin = useIsAdmin()
@@ -183,11 +192,12 @@ export function usePayments(sinceMs?: number, enabled = true) {
     queryFn: () => listPayments(sinceMs),
     enabled: ready && admin && enabled,
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
 
-/** مجموع كل الدفعات من أول ما العيادة اشتغلت — رقم واحد من السيرفر */
+/** مجموع كل الدفعات من أول ما العيادة اشتغلت — رقم واحد من السيرفر (للدكتور بس) */
 export function usePaymentsTotal() {
   const ready = useClinicReady()
   const admin = useIsAdmin()
@@ -196,6 +206,7 @@ export function usePaymentsTotal() {
     queryFn: getPaymentsTotal,
     enabled: ready && admin,
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
@@ -251,10 +262,10 @@ export function useSetPatientDoctor() {
   })
 }
 
-/** تحديث بيانات المريض اللي اتعدّل بس — قايمة المرضى بتتعلّم قديمة وتتحمّل لما حد يفتحها */
+/** تحديث بيانات المريض على كل الأجهزة اللي فاتحة الصفحة — القايمة والسجل مع بعض */
 function refreshClinicData(qc: QueryClient, patientId?: string) {
   if (patientId) {
-    void qc.invalidateQueries({ queryKey: ['patients'], exact: true, refetchType: 'none' })
+    void qc.invalidateQueries({ queryKey: ['patients'], exact: true })
     void qc.invalidateQueries({ queryKey: ['patients', patientId] })
     void qc.invalidateQueries({ queryKey: ['visits', patientId] })
     void qc.invalidateQueries({ queryKey: ['payments', 'patient', patientId] })
@@ -412,6 +423,7 @@ export function usePatientPayments(patientId: string) {
     queryFn: () => listPaymentsForPatient(patientId),
     enabled: ready && Boolean(patientId),
     retry: 1,
+    ...CLINIC_SYNC,
   })
   return { ...query, isLoading: !ready || query.isLoading }
 }
@@ -481,6 +493,55 @@ export function useClinicSettings() {
     staleTime: 5 * 60_000,
   })
   return { ...query, settings: query.data ?? DEFAULT_SETTINGS, isLoading: !ready || query.isLoading }
+}
+
+/** مفتاح الشهر الحالي — بيتغير لوحده مع دخول شهر جديد */
+export function useMonthKey() {
+  const today = useTodayKey()
+  return monthKey(new Date(`${today}T12:00:00`))
+}
+
+/** نسخة احتياطية الشهر ده — للدكتور بس */
+export function useMonthBackup() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const key = useMonthKey()
+  const query = useQuery({
+    queryKey: ['backups', 'month', key],
+    queryFn: () => getBackupForMonth(key),
+    enabled: ready && admin,
+    retry: 1,
+    staleTime: 30_000,
+  })
+  return { ...query, monthKey: key, isLoading: !ready || (admin && query.isLoading) }
+}
+
+export function useLatestBackup() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['backups', 'latest'],
+    queryFn: getLatestBackup,
+    enabled: ready && admin,
+    retry: 1,
+    staleTime: 30_000,
+  })
+  return { ...query, isLoading: !ready || (admin && query.isLoading) }
+}
+
+export function useDownloadClinicBackup() {
+  const qc = useQueryClient()
+  const key = useMonthKey()
+  return useMutation({
+    mutationFn: downloadClinicBackup,
+    onSuccess: async (log) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['backups', 'month', key] }),
+        qc.invalidateQueries({ queryKey: ['backups', 'latest'] }),
+        qc.setQueryData(['backups', 'month', key], log),
+      ])
+    },
+  })
 }
 
 export function useSaveClinicSettings() {

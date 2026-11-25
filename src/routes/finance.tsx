@@ -25,6 +25,7 @@ import { DEFAULT_DOCTOR, DOCTORS, type DoctorId } from '@/lib/doctors'
 import { MoneyDonut, type DonutSlice } from '@/components/clinic/money-donut'
 import {
   addDays,
+  groupByDay,
   money,
   parseDayKey,
   relativeDayLabel,
@@ -32,9 +33,9 @@ import {
   startOfMonth,
   startOfWeek,
   timeLabel,
-  withWeekday,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import type { Expense } from '@/types'
 
 const DOCTOR_COLORS: Record<DoctorId, string> = { ashraf: '#2563eb', heba: '#ec4899' }
 
@@ -184,7 +185,9 @@ function Finance() {
       <header className="mb-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold leading-tight sm:text-[1.75rem]">الخزنة</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">دخل الكشف والعلاج، كل دفعة، والمصروفات — للدكتور بس</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            دخل ومصروفات باليوم والأسبوع والشهر — دوس على أي يوم في المصروفات عشان تفاصيله
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="grid flex-1 grid-cols-4 gap-1 rounded-2xl bg-muted/70 p-1 lg:w-[26rem] lg:flex-none">
@@ -292,7 +295,7 @@ function Finance() {
                 <p className="mt-3 rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
                   مفيش مصروفات في الفترة دي
                 </p>
-              ) : (
+              ) : period === 'day' || period === 'custom' ? (
                 <ul className="mt-3 min-h-0 divide-y divide-border/60 overflow-auto rounded-xl border border-border/60 bg-card max-lg:max-h-96">
                   {stats.expenses.map((x) => (
                     <ExpenseRow
@@ -301,10 +304,18 @@ function Finance() {
                       category={x.category}
                       amount={x.amount}
                       note={x.note}
-                      when={period === 'day' || period === 'custom' ? timeLabel(x.spentAt) : withWeekday(x.date, x.spentAt) || relativeDayLabel(x.spentAt)}
+                      when={timeLabel(x.spentAt)}
                     />
                   ))}
                 </ul>
+              ) : (
+                <ExpenseDayGroups
+                  expenses={stats.expenses}
+                  onOpenDay={(key) => {
+                    setCustomDay(key)
+                    setPeriod('custom')
+                  }}
+                />
               )}
             </section>
             </div>
@@ -397,6 +408,46 @@ function AddExpense() {
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function ExpenseDayGroups({
+  expenses,
+  onOpenDay,
+}: {
+  expenses: Expense[]
+  onOpenDay: (dayKey: string) => void
+}) {
+  const groups = groupByDay(expenses, (x) => x.spentAt)
+  return (
+    <div className="mt-3 min-h-0 space-y-2 overflow-auto pe-1 max-lg:max-h-96">
+      {groups.map((group) => {
+        const total = group.items.reduce((s, x) => s + x.amount, 0)
+        return (
+          <button
+            key={group.key}
+            type="button"
+            onClick={() => onOpenDay(group.key)}
+            className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-start transition hover:border-primary/40 hover:bg-primary/5"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <Receipt className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold">{group.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {group.items.length} مصروف
+                {group.items[0]?.note ? ` · مثلاً: ${group.items[0].note}` : ''}
+              </span>
+            </span>
+            <span className="shrink-0 text-end">
+              <span className="font-display block text-sm font-semibold text-destructive">−{money(total)}</span>
+              <span className="text-[11px] font-semibold text-primary">افتح اليوم</span>
+            </span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

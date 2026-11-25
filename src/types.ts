@@ -87,9 +87,25 @@ export type ClinicSettings = {
   newPatientFee: number
   discountPresets: number[]
   expenseCategories: string[]
+  /** أسماء الممرضات — الدكتور بيضيفها، والاستقبال بيختار منها عند كل تسجيل */
+  nurses: string[]
 }
 
 export type StaffRole = 'admin' | 'helper'
+
+/** سجل كل مرة الدكتور نزّل فيها نسخة احتياطية (dayKey هنا = YYYY-MM للشهر) */
+export type BackupLog = {
+  id: string
+  dayKey: string
+  fileName: string
+  downloadedAt: number
+  byEmail: string
+  byName: string
+  patientsCount: number
+  visitsCount: number
+  paymentsCount: number
+  expensesCount: number
+}
 
 export type Expense = {
   id: string

@@ -115,8 +115,8 @@ export function ChargeFields({
         />
       </Field>
 
-      <div className={cn('@container col-span-full rounded-2xl border border-border/70 bg-muted/25 p-3', panelClassName)}>
-        <div className="grid grid-cols-2 gap-2.5 @xs:grid-cols-3">
+      <div className={cn('col-span-full rounded-2xl border border-border/70 bg-muted/25 p-2.5', panelClassName)}>
+        <div className="grid grid-cols-3 gap-2">
           <Field dense label="الإجمالي" {...(priceHint ? { hint: priceHint } : {})}>
             <input
               className={cn(
@@ -163,11 +163,7 @@ export function ChargeFields({
             </div>
           </Field>
 
-          <Stat
-            label="الباقي"
-            className="col-span-2 @xs:col-span-1"
-            tone={form.remaining > 0 ? 'text-warning' : 'text-success'}
-          >
+          <Stat label="الباقي" tone={form.remaining > 0 ? 'text-warning' : 'text-success'}>
             {money(form.remaining)}
             {charge.discountAmount > 0 ? (
               <span className="text-xs font-normal text-muted-foreground">(بعد الخصم {money(charge.final)})</span>

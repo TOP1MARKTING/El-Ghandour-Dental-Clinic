@@ -21,11 +21,12 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { getAuthClient, getDb } from '@/lib/backend'
-import { dayKey, formatArabicDate, formatArabicDateTime, formatClock, relativeDayLabel } from '@/lib/format'
+import { dayKey, formatArabicDate, formatArabicDateTime, formatClock, monthKey, relativeDayLabel } from '@/lib/format'
 import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
 import { toDoctorId, type DoctorId } from '@/lib/doctors'
 import type {
   AppointmentStatus,
+  BackupLog,
   ClinicAppointment,
   ClinicSettings,
   Expense,
@@ -37,6 +38,7 @@ import type {
   Service,
   Visit,
 } from '@/types'
+import { backupFileName, buildClinicWorkbook, triggerXlsxDownload } from '@/lib/clinic-backup'
 
 let actorName = ''
 
@@ -50,9 +52,15 @@ function actor() {
   return { email, name: actorName || email }
 }
 
-function stamp() {
+function stamp(byName?: string) {
   const a = actor()
-  return { createdBy: a.email, createdByName: a.name }
+  return { createdBy: a.email, createdByName: byName?.trim() || a.name }
+}
+
+function requireByName(byName?: string) {
+  const name = byName?.trim() ?? ''
+  if (!name) throw new Error('اختار اسم الممرضة اللي بتسجّل')
+  return name
 }
 
 function touch() {
@@ -248,6 +256,7 @@ function oldBalanceVisit(input: {
   total: number
   paid: number
   now: number
+  byName?: string
 }) {
   return {
     patientId: input.patientId,
@@ -264,17 +273,18 @@ function oldBalanceVisit(input: {
     date: formatArabicDate(new Date(input.now)),
     createdAtMs: input.now,
     createdAt: serverTimestamp(),
-    ...stamp(),
+    ...stamp(input.byName),
   }
 }
 
-export async function addOldBalance(input: OldBalanceInput & { patientId: string; patientName: string }) {
+export async function addOldBalance(input: OldBalanceInput & { patientId: string; patientName: string; byName: string }) {
+  const byName = requireByName(input.byName)
   const db = getDb()
   const old = checkOldBalance(input)
   const batch = writeBatch(db)
   batch.set(
     doc(collection(db, 'visits')),
-    oldBalanceVisit({ ...old, patientId: input.patientId, patientName: input.patientName, now: Date.now() }),
+    oldBalanceVisit({ ...old, patientId: input.patientId, patientName: input.patientName, now: Date.now(), byName }),
   )
   batch.update(doc(db, 'patients', input.patientId), {
     ...touch(),
@@ -334,8 +344,10 @@ export async function createVisit(input: {
   notes?: string
   /** ما يغيرش العلاج الحالي للمريض (زي رسوم الكشف) */
   keepProblem?: boolean
+  byName: string
 }) {
   if (input.basePrice < 0) throw new Error('السعر غير صحيح')
+  const byName = requireByName(input.byName)
   const db = getDb()
 
   await runTransaction(db, async (tx) => {
@@ -344,7 +356,13 @@ export async function createVisit(input: {
     if (!patientSnap.exists()) throw new Error('المريض غير موجود')
     const patient = mapPatient(patientSnap.id, patientSnap.data())
 
-    const visit = visitWrites(db, { ...input, patientName: patient.name, doctorId: patient.doctor, now: Date.now() })
+    const visit = visitWrites(db, {
+      ...input,
+      patientName: patient.name,
+      doctorId: patient.doctor,
+      now: Date.now(),
+      byName,
+    })
     for (const [ref, data] of visit.writes) tx.set(ref, data)
 
     tx.update(patientRef, {
@@ -372,6 +390,7 @@ function visitWrites(
     paidToday: number
     notes?: string
     now: number
+    byName: string
   },
 ) {
   const charge = applyDiscount(input.basePrice, input.discountPercent)
@@ -395,7 +414,7 @@ function visitWrites(
         date: formatArabicDate(),
         createdAtMs: input.now,
         createdAt: serverTimestamp(),
-        ...stamp(),
+        ...stamp(input.byName),
       },
     ],
   ]
@@ -410,6 +429,7 @@ function visitWrites(
         doctor: input.doctorId,
         now: input.now,
         visitId: visitRef.id,
+        byName: input.byName,
       }),
     ])
   }
@@ -427,6 +447,7 @@ function paymentDoc(input: {
   note?: string
   /** الزيارة اللي الدفعة اتدفعت معاها — عشان لو العلاج اتمسح تتمسح معاه */
   visitId?: string
+  byName: string
 }) {
   return {
     patientId: input.patientId,
@@ -440,7 +461,7 @@ function paymentDoc(input: {
     kind: input.kind,
     createdAtMs: input.now,
     createdAt: serverTimestamp(),
-    ...stamp(),
+    ...stamp(input.byName),
   }
 }
 
@@ -457,7 +478,9 @@ export async function createPayment(input: {
   amount: number
   method?: string
   note?: string
+  byName: string
 }) {
+  const byName = requireByName(input.byName)
   const db = getDb()
   let remaining = 0
   let paidAmount = 0
@@ -484,6 +507,7 @@ export async function createPayment(input: {
         kind: 'دفعة',
         doctor: patient.doctor,
         now: Date.now(),
+        byName,
         ...(input.method ? { method: input.method } : {}),
         ...(input.note ? { note: input.note } : {}),
       }),
@@ -656,6 +680,7 @@ function queueDoc(input: {
   key: string
   now: number
   billedTotal?: number
+  byName: string
 }) {
   return {
     patientId: input.patientId,
@@ -670,7 +695,7 @@ function queueDoc(input: {
     status: 'في الانتظار',
     createdAtMs: input.now,
     createdAt: serverTimestamp(),
-    ...stamp(),
+    ...stamp(input.byName),
     ...(input.billedTotal !== undefined ? { billed: true, billedTotal: input.billedTotal } : {}),
   }
 }
@@ -685,18 +710,20 @@ export async function checkInNewPatient(input: {
   age?: number
   address?: string
   reason?: string
-  /** سعر الكشف من إعدادات العيادة */
+  /** سعر الكشف من إعدادات العيادة — صفر = بدون كشف */
   feePrice: number
   /** دفع الكشف ولا اتسجل عليه */
   feePaid?: boolean
   /** لو اتحدد سعر عند الحجز بيتسجل العلاج والدفعة على طول */
   charge?: ChargeInput
   doctor: DoctorId
+  byName: string
 }) {
+  const byName = requireByName(input.byName)
   const db = getDb()
   const name = input.name.trim()
   const phone = input.phone.trim()
-  const reason = input.reason?.trim() || 'كشف جديد'
+  const reason = input.reason?.trim() || (input.feePrice > 0 ? 'كشف جديد' : 'متابعة')
   const doctor = toDoctorId(input.doctor)
   const now = Date.now()
   const { key, order } = await todayQueueState()
@@ -713,6 +740,7 @@ export async function checkInNewPatient(input: {
           basePrice: input.feePrice,
           paidToday: input.feePaid === false ? 0 : input.feePrice,
           now,
+          byName,
         })
       : { writes: [], final: 0, paid: 0 }
   const charge =
@@ -726,6 +754,7 @@ export async function checkInNewPatient(input: {
           ...(input.charge.discountPercent ? { discountPercent: input.charge.discountPercent } : {}),
           paidToday: input.charge.paidToday,
           now: now + 1,
+          byName,
         })
       : null
 
@@ -744,7 +773,7 @@ export async function checkInNewPatient(input: {
     paid: fee.paid + (charge?.paid ?? 0),
     createdAtMs: now,
     createdAt: serverTimestamp(),
-    ...stamp(),
+    ...stamp(byName),
   })
   batch.set(
     queueRef,
@@ -758,6 +787,7 @@ export async function checkInNewPatient(input: {
       order,
       key,
       now,
+      byName,
       ...(charge ? { billedTotal: charge.final } : {}),
     }),
   )
@@ -776,7 +806,9 @@ export async function checkInFollowupPatient(input: {
   oldPayment?: number
   /** هيدخل لمين النهاردة — لو مش متحدد يبقى دكتوره المتابع */
   doctor?: DoctorId
+  byName: string
 }) {
+  const byName = requireByName(input.byName)
   const db = getDb()
   const [patient, state, appointmentsSnap] = await Promise.all([
     getPatient(input.patientId),
@@ -787,7 +819,7 @@ export async function checkInFollowupPatient(input: {
   if (state.alreadyHere) throw new Error(ALREADY_HERE_ERROR)
   const oldPayment = Math.round(input.oldPayment ?? 0)
   if (!Number.isFinite(oldPayment) || oldPayment < 0) throw new Error('أدخل مبلغ صحيح')
-  if (oldPayment > Math.max(0, patient.total - patient.paid)) throw new Error('المدفوع من القديم أكبر من اللي عليه')
+  if (oldPayment > Math.max(0, patient.total - patient.paid)) throw new Error('المدفوع من الحساب القديم أكبر من اللي عليه')
 
   const reason = input.reason?.trim() || patient.problem?.trim() || 'متابعة'
   const now = Date.now()
@@ -804,6 +836,7 @@ export async function checkInFollowupPatient(input: {
           ...(input.charge.discountPercent ? { discountPercent: input.charge.discountPercent } : {}),
           paidToday: input.charge.paidToday,
           now,
+          byName,
         })
       : null
   const changeProblem = Boolean(charge) || (input.isNewTreatment && reason !== patient.problem)
@@ -821,6 +854,7 @@ export async function checkInFollowupPatient(input: {
       order: state.order,
       key: state.key,
       now,
+      byName,
       ...(charge ? { billedTotal: charge.final } : {}),
     }),
   )
@@ -844,6 +878,7 @@ export async function checkInFollowupPatient(input: {
         doctor: patient.doctor,
         note: 'من الحساب القديم',
         now: now + 2,
+        byName,
       }),
     )
   }
@@ -1060,12 +1095,18 @@ function textList(value: unknown, fallback: string[]) {
   return list.length ? list : fallback
 }
 
+function nursesList(value: unknown) {
+  if (!Array.isArray(value)) return DEFAULT_SETTINGS.nurses
+  return [...new Set(value.map((v) => String(v ?? '').trim()).filter(Boolean))]
+}
+
 function mapSettings(data: DocumentData | undefined): ClinicSettings {
   const fee = Number(data?.['newPatientFee'])
   return {
     newPatientFee: Number.isFinite(fee) && fee >= 0 ? Math.round(fee) : DEFAULT_SETTINGS.newPatientFee,
     discountPresets: numberList(data?.['discountPresets'], DEFAULT_SETTINGS.discountPresets),
     expenseCategories: textList(data?.['expenseCategories'], DEFAULT_SETTINGS.expenseCategories),
+    nurses: nursesList(data?.['nurses']),
   }
 }
 
@@ -1092,4 +1133,84 @@ export async function saveClinicSettings(input: ClinicSettings) {
   const clean = mapSettings({ ...input })
   if (!clean.discountPresets.includes(0)) clean.discountPresets.unshift(0)
   await setDoc(doc(getDb(), 'settings', 'clinic'), { ...clean, ...touch() }, { merge: true })
+}
+
+function mapBackup(id: string, data: DocumentData): BackupLog {
+  return {
+    id,
+    dayKey: String(data['dayKey'] ?? ''),
+    fileName: String(data['fileName'] ?? ''),
+    downloadedAt: Number(data['downloadedAtMs'] ?? 0),
+    byEmail: String(data['byEmail'] ?? data['createdBy'] ?? ''),
+    byName: String(data['byName'] ?? data['createdByName'] ?? ''),
+    patientsCount: Number(data['patientsCount'] ?? 0),
+    visitsCount: Number(data['visitsCount'] ?? 0),
+    paymentsCount: Number(data['paymentsCount'] ?? 0),
+    expensesCount: Number(data['expensesCount'] ?? 0),
+  }
+}
+
+async function listAllVisits() {
+  const snap = await getDocs(collection(getDb(), 'visits'))
+  return snap.docs.map((d) => mapVisit(d.id, d.data()))
+}
+
+async function listAllExpenses() {
+  const snap = await getDocs(collection(getDb(), 'expenses'))
+  return snap.docs.map((d) => mapExpense(d.id, d.data()))
+}
+
+/** هل الدكتور نزّل نسخة الشهر ده؟ (dayKey هنا = YYYY-MM) */
+export async function getBackupForMonth(key = monthKey()) {
+  const snap = await getDocs(query(collection(getDb(), 'backups'), where('dayKey', '==', key)))
+  const list = snap.docs.map((d) => mapBackup(d.id, d.data()))
+  list.sort((a, b) => b.downloadedAt - a.downloadedAt)
+  return list[0] ?? null
+}
+
+/** آخر نسخة اتنزلت (أي شهر) */
+export async function getLatestBackup() {
+  const snap = await getDocs(collection(getDb(), 'backups'))
+  const list = snap.docs.map((d) => mapBackup(d.id, d.data()))
+  list.sort((a, b) => b.downloadedAt - a.downloadedAt)
+  return list[0] ?? null
+}
+
+/** يبني Excel وينزّله ويسجّل اللوج — للدكتور بس، مرة كل شهر */
+export async function downloadClinicBackup() {
+  const key = monthKey()
+  const fileName = backupFileName(key)
+  const [patients, payments, visits, expenses] = await Promise.all([
+    listPatients(),
+    listPayments(),
+    listAllVisits(),
+    listAllExpenses(),
+  ])
+
+  const buffer = await buildClinicWorkbook({ patients, visits, payments, expenses })
+  triggerXlsxDownload(buffer, fileName)
+
+  const a = actor()
+  const now = Date.now()
+  const ref = doc(collection(getDb(), 'backups'))
+  const log: Omit<BackupLog, 'id'> = {
+    dayKey: key,
+    fileName,
+    downloadedAt: now,
+    byEmail: a.email,
+    byName: a.name,
+    patientsCount: patients.length,
+    visitsCount: visits.length,
+    paymentsCount: payments.length,
+    expensesCount: expenses.length,
+  }
+  await setDoc(ref, {
+    ...log,
+    downloadedAtMs: now,
+    createdAtMs: now,
+    createdAt: serverTimestamp(),
+    createdBy: a.email,
+    createdByName: a.name,
+  })
+  return { id: ref.id, ...log }
 }

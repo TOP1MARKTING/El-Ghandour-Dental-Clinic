@@ -8,6 +8,7 @@ import { useCreatePayment, usePatients } from '@/lib/clinic-hooks'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
+import { NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 
 type Search = { patient?: string }
 
@@ -36,6 +37,7 @@ function AddPayment() {
   const create = useCreatePayment()
   const [patientId, setPatientId] = useState(initialPatient ?? '')
   const [saving, setSaving] = useState(false)
+  const nursePick = useSelectedNurse()
 
   useEffect(() => {
     if (initialPatient) setPatientId(initialPatient)
@@ -62,12 +64,18 @@ function AddPayment() {
       toast.error('المبلغ أكبر من الباقي على المريض')
       return
     }
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
+      return
+    }
     setSaving(true)
     try {
       await create.mutateAsync({
         patientId,
         amount,
         method: 'نقدي',
+        byName: nurse.name,
       })
       toast.success('تم تسجيل الدفعة ✅')
       void nav({ to: '/patients/$patientId', params: { patientId } })
@@ -88,9 +96,16 @@ function AddPayment() {
           : 'اختار المريض وسجّل المبلغ المدفوع فقط'
       }
       submitLabel={saving ? 'جاري الحفظ...' : 'تحصيل'}
-      submitDisabled={saving}
+      submitDisabled={saving || !nursePick.ready}
       onSubmit={submit}
     >
+      <NursePicker
+        value={nursePick.nurse}
+        onChange={nursePick.setNurse}
+        nurses={nursePick.nurses}
+        className="sm:col-span-2"
+      />
+
       {!knownPatient ? (
         <Field dense label="المريض" className="sm:col-span-2">
           <PatientSearchPicker value={patientId} onChange={setPatientId} required />

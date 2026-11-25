@@ -43,6 +43,7 @@ import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { areaClass, inputClass } from '@/components/clinic/form-layout'
 import { ToothIcon } from '@/components/clinic/dental-icons'
 import { OldBalanceDialog } from '@/components/clinic/old-balance'
+import { NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
 import { splitReasons } from '@/components/clinic/reason-select'
 import { Button } from '@/components/ui/button'
@@ -120,7 +121,7 @@ type TabId = 'new' | 'history' | 'appointments'
 
 function PatientTabs({ patient, visits }: { patient: Patient; visits: Visit[] }) {
   const patientId = patient.id
-  const [tab, setTab] = useState<TabId>('appointments')
+  const [tab, setTab] = useState<TabId>('history')
   const [formKey, setFormKey] = useState(0)
   const { data: payments = [], isLoading: paymentsLoading } = usePatientPayments(patientId)
   const upcoming = useUpcomingPatientAppointments(patientId)
@@ -393,10 +394,16 @@ function TodayStatus({ patient: p }: { patient: Patient }) {
 function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
   const create = useCreateVisit()
   const form = useChargeForm()
+  const nursePick = useSelectedNurse()
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (create.isPending) return
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
+      return
+    }
     const { charge, paidN } = form
     if (!form.treatment) {
       toast.error('اختار نوع العلاج')
@@ -417,6 +424,7 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
         basePrice: charge.base,
         discountPercent: form.discount,
         paidToday: paidN,
+        byName: nurse.name,
       })
       toast.success(
         form.remaining > 0
@@ -431,6 +439,7 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
 
   return (
     <form onSubmit={submit} className="@container grid gap-3">
+      <NursePicker value={nursePick.nurse} onChange={nursePick.setNurse} nurses={nursePick.nurses} />
       <div className="grid gap-3 @xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] @xl:items-start">
         <ChargeFields
           form={form}
@@ -440,7 +449,11 @@ function AddTreatmentForm({ patientId, onSaved }: { patientId: string; onSaved: 
         />
       </div>
       <div className="flex justify-end">
-        <Button type="submit" className="h-11 w-full rounded-xl sm:h-10 sm:w-auto sm:min-w-44" disabled={create.isPending}>
+        <Button
+          type="submit"
+          className="h-11 w-full rounded-xl sm:h-10 sm:w-auto sm:min-w-44"
+          disabled={create.isPending || !nursePick.ready}
+        >
           <NotebookPen className="size-4" />
           {create.isPending ? 'جاري الحفظ...' : 'حفظ العلاج'}
         </Button>
@@ -561,10 +574,16 @@ function QuickCollect({
   const create = useCreatePayment()
   const [amount, setAmount] = useState('')
   const [saving, setSaving] = useState(false)
+  const nursePick = useSelectedNurse()
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (saving) return
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
+      return
+    }
     const value = Number(amount || 0)
     if (value <= 0) {
       toast.error('أدخل المبلغ المدفوع')
@@ -580,6 +599,7 @@ function QuickCollect({
         patientId,
         amount: value,
         method: 'نقدي',
+        byName: nurse.name,
       })
       toast.success(`تم تحصيل ${money(value)} من ${patientName}`)
       setAmount('')
@@ -593,6 +613,12 @@ function QuickCollect({
   return (
     <form onSubmit={submit} className="mt-3 border-t border-border/70 pt-3">
       <p className="mb-1.5 text-sm font-semibold">دفع من الباقي</p>
+      <NursePicker
+        value={nursePick.nurse}
+        onChange={nursePick.setNurse}
+        nurses={nursePick.nurses}
+        className="mb-2"
+      />
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
           <input
@@ -615,7 +641,7 @@ function QuickCollect({
             الكل
           </button>
         </div>
-        <Button type="submit" disabled={saving} className="h-11 shrink-0 rounded-xl px-5 sm:h-10">
+        <Button type="submit" disabled={saving || !nursePick.ready} className="h-11 shrink-0 rounded-xl px-5 sm:h-10">
           {saving ? 'جاري...' : 'دفع'}
         </Button>
       </div>
