@@ -144,8 +144,8 @@ export function useDeleteExpense() {
   })
 }
 
-/** بيانات الحالات بتتزامن بين الدكتور والممرضات كل شوية + مع كل تركيز على الصفحة */
-const CLINIC_SYNC = { staleTime: 10_000, refetchInterval: 20_000, refetchOnWindowFocus: true as const }
+/** كاش دقيقة — التحديث بعد العمليات من الـ mutations، من غير polling كل 20 ثانية */
+const CLINIC_SYNC = { staleTime: 60_000, refetchOnWindowFocus: true as const }
 
 export function usePatients() {
   const ready = useClinicReady()

@@ -13,7 +13,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { getAuthClient } from '@/lib/backend'
-import { setActorName } from '@/lib/clinic-api'
+import { setActorName } from '@/lib/clinic-actor'
 import { DOCTORS, doctorByEmail, type DoctorId } from '@/lib/doctors'
 import type { StaffRole } from '@/types'
 

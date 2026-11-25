@@ -1,19 +1,109 @@
 import { type ReactNode } from 'react'
-import { Download } from 'lucide-react'
+import { Download, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { useDownloadClinicBackup, useLatestBackup, useMonthBackup } from '@/lib/clinic-hooks'
+import {
+  useDownloadClinicBackup,
+  useIsAdmin,
+  useLatestBackup,
+  useMonthBackup,
+  useTodayKey,
+} from '@/lib/clinic-hooks'
 import { errorText } from '@/lib/api-errors'
-import { formatArabicDateTime } from '@/lib/format'
+import { formatArabicDateTime, parseDayKey } from '@/lib/format'
 
-/** القفل الإجباري متوقف حاليًا — الدكتور يشتغل عادي والتنزيل اختياري من اللوحة */
+function backupFileLabel(monthKey: string) {
+  const [y, m] = monthKey.split('-')
+  return `backup-full-${m}-${y}.xlsx`
+}
+import { ToothIcon } from '@/components/clinic/dental-icons'
+
+/** يوم 1 من الشهر؟ (1 ديسمبر، 1 يناير، 1 فبراير...) */
+function isFirstOfMonth(todayKey: string) {
+  return parseDayKey(todayKey).getDate() === 1
+}
+
+/** للدكتور بس: يوم 1 من كل شهر لازم ينزّل نسخة كاملة قبل ما يشتغل */
 export function BackupGate({ children }: { children: ReactNode }) {
-  return children
+  const isAdmin = useIsAdmin()
+  const todayKey = useTodayKey()
+  const dueToday = isFirstOfMonth(todayKey)
+  const { data: monthBackup, isLoading, isError, refetch, monthKey } = useMonthBackup()
+  const download = useDownloadClinicBackup()
+
+  if (!isAdmin || !dueToday) return children
+  if (isLoading) {
+    return (
+      <div dir="rtl" className="grid min-h-dvh place-items-center bg-scene">
+        <div className="animate-rise text-center">
+          <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-clinic">
+            <ToothIcon className="size-8" strokeWidth={1.6} />
+          </span>
+          <p className="mt-4 text-sm text-muted-foreground">جاري التأكد من النسخة الاحتياطية...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (monthBackup) return children
+
+  const save = async () => {
+    try {
+      const log = await download.mutateAsync()
+      toast.success(
+        `اتنزلت ${log.fileName} ✅ · ${log.patientsCount} مريض · ${log.visitsCount} زيارة`,
+      )
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء تنزيل النسخة'))
+    }
+  }
+
+  return (
+    <div dir="rtl" className="grid min-h-dvh place-items-center bg-scene px-4">
+      <div className="w-full max-w-lg rounded-3xl border border-destructive/30 bg-card p-6 shadow-clinic sm:p-8">
+        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+          <ShieldAlert className="size-7" />
+        </span>
+        <h1 className="mt-4 text-center text-xl font-bold sm:text-2xl">النسخة الاحتياطية إجبارية</h1>
+        <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
+          النهاردة يوم 1 من الشهر — لازم تنزل نسخة كاملة من بيانات العيادة عشان تقدر تشتغل. الملف فيه
+          <strong> كل حاجة من أول يوم اشتغل السيستم</strong>: المرضى، الزيارات، الكشوفات، المدفوعات،
+          المصروفات، المواعيد، والأسعار.
+        </p>
+        <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+          اسم الملف: <span dir="ltr">{backupFileLabel(monthKey)}</span>
+        </p>
+        {isError ? (
+          <p className="mt-3 text-center text-sm font-semibold text-destructive">
+            تعذر التأكد من النسخ السابقة —{' '}
+            <button type="button" className="underline" onClick={() => void refetch()}>
+              حاول تاني
+            </button>
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          className="mt-5 h-12 w-full rounded-xl text-base"
+          disabled={download.isPending}
+          onClick={() => void save()}
+        >
+          <Download className="size-5" />
+          {download.isPending ? 'جاري تجهيز الملف...' : 'تنزيل النسخة الاحتياطية'}
+        </Button>
+        <p className="mt-3 text-center text-[11px] text-muted-foreground">
+          القفل ده يظهر يوم 1 بس (ديسمبر، يناير، فبراير...). باقي الأيام الشغل عادي، والممرضات مش
+          بيتأثروا.
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export function BackupStatusCard() {
   const { data: latest, isLoading } = useLatestBackup()
   const { data: monthBackup } = useMonthBackup()
+  const todayKey = useTodayKey()
+  const dueToday = isFirstOfMonth(todayKey)
   const download = useDownloadClinicBackup()
 
   const save = async () => {
@@ -39,7 +129,11 @@ export function BackupStatusCard() {
         {latest ? (
           <p className="truncate text-[11px] text-muted-foreground">
             {latest.patientsCount} مريض · {latest.visitsCount} زيارة · {latest.paymentsCount} دفعة
-            {monthBackup ? ' · نسخة الشهر ده تمام ✅' : ' · لسه محتاج تنزيل الشهر ده'}
+            {monthBackup
+              ? ' · نسخة الشهر ده تمام ✅'
+              : dueToday
+                ? ' · لازم تنزيل النهاردة (يوم 1)'
+                : ' · الإلزام يوم 1 من كل شهر'}
             {' · الملف كامل من أول يوم'}
           </p>
         ) : null}

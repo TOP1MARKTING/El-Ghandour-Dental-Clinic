@@ -5,7 +5,13 @@ import { routeTree } from "./routeTree.gen";
 export const getRouter = () => {
   // دقيقة كاش: التنقل بين الصفحات ما يعيدش قراية كل حاجة من قاعدة البيانات
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { staleTime: 60_000 } },
+    defaultOptions: {
+      queries: {
+        staleTime: 60_000,
+        // متجبش الداتا تاني مع كل رجوع للتاب — الـ mutations بتعمل invalidate
+        refetchOnWindowFocus: false,
+      },
+    },
   });
 
   const router = createRouter({

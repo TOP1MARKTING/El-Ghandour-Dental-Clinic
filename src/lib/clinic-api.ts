@@ -7,7 +7,9 @@ import {
   getDoc,
   getDocs,
   increment,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -21,7 +23,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { getAuthClient, getDb } from '@/lib/backend'
-import { dayKey, formatArabicDate, formatArabicDateTime, formatClock, monthKey, relativeDayLabel } from '@/lib/format'
+import { addDays, dayKey, formatArabicDate, formatArabicDateTime, formatClock, monthKey, relativeDayLabel } from '@/lib/format'
 import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
 import { toDoctorId, type DoctorId } from '@/lib/doctors'
 import type {
@@ -38,18 +40,11 @@ import type {
   Service,
   Visit,
 } from '@/types'
-import { backupFileName, buildClinicWorkbook, triggerXlsxDownload } from '@/lib/clinic-backup'
-
-let actorName = ''
-
-/** اسم اللي فاتح الحساب — بيتحط مع كل عملية عشان نعرف مين عملها */
-export function setActorName(name: string) {
-  actorName = name
-}
+import { getActorName } from '@/lib/clinic-actor'
 
 function actor() {
   const email = getAuthClient().currentUser?.email ?? ''
-  return { email, name: actorName || email }
+  return { email, name: getActorName() || email }
 }
 
 function stamp(byName?: string) {
@@ -1049,9 +1044,12 @@ export async function createAppointment(input: {
   })
 }
 
-/** المواعيد من النهاردة ورايح */
+/** المواعيد من النهاردة لحد 90 يوم قدام (من غير ما نسحب سنين قدام) */
 export async function listUpcomingAppointments(fromKey = dayKey()) {
-  const snap = await getDocs(query(collection(getDb(), 'appointments'), where('date', '>=', fromKey)))
+  const toKey = dayKey(addDays(new Date(`${fromKey}T12:00:00`), 90))
+  const snap = await getDocs(
+    query(collection(getDb(), 'appointments'), where('date', '>=', fromKey), where('date', '<=', toKey)),
+  )
   return snap.docs.map((d) => mapAppointment(d.id, d.data())).sort(byDateTime)
 }
 
@@ -1165,7 +1163,7 @@ async function listAllAppointments() {
   return snap.docs.map((d) => mapAppointment(d.id, d.data()))
 }
 
-/** هل الدكتور نزّل نسخة الشهر ده؟ (dayKey هنا = YYYY-MM) */
+/** هل الدكتور نزّل نسخة الشهر ده؟ (dayKey هنا = YYYY-MM) — عدد قليل في الشهر، ترتيب على الكلاينت */
 export async function getBackupForMonth(key = monthKey()) {
   const snap = await getDocs(query(collection(getDb(), 'backups'), where('dayKey', '==', key)))
   const list = snap.docs.map((d) => mapBackup(d.id, d.data()))
@@ -1175,14 +1173,16 @@ export async function getBackupForMonth(key = monthKey()) {
 
 /** آخر نسخة اتنزلت (أي شهر) */
 export async function getLatestBackup() {
-  const snap = await getDocs(collection(getDb(), 'backups'))
-  const list = snap.docs.map((d) => mapBackup(d.id, d.data()))
-  list.sort((a, b) => b.downloadedAt - a.downloadedAt)
-  return list[0] ?? null
+  const snap = await getDocs(
+    query(collection(getDb(), 'backups'), orderBy('downloadedAtMs', 'desc'), limit(1)),
+  )
+  const d = snap.docs[0]
+  return d ? mapBackup(d.id, d.data()) : null
 }
 
 /** يبني Excel بكل بيانات العيادة من أول يوم وينزّله — الإلزام مرة كل شهر للدكتور */
 export async function downloadClinicBackup() {
+  const { backupFileName, buildClinicWorkbook, triggerXlsxDownload } = await import('@/lib/clinic-backup')
   const key = monthKey()
   const fileName = backupFileName(key)
   const [patients, payments, visits, expenses, appointments, services] = await Promise.all([
