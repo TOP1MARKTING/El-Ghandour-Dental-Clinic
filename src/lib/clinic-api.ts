@@ -1160,6 +1160,11 @@ async function listAllExpenses() {
   return snap.docs.map((d) => mapExpense(d.id, d.data()))
 }
 
+async function listAllAppointments() {
+  const snap = await getDocs(collection(getDb(), 'appointments'))
+  return snap.docs.map((d) => mapAppointment(d.id, d.data()))
+}
+
 /** هل الدكتور نزّل نسخة الشهر ده؟ (dayKey هنا = YYYY-MM) */
 export async function getBackupForMonth(key = monthKey()) {
   const snap = await getDocs(query(collection(getDb(), 'backups'), where('dayKey', '==', key)))
@@ -1176,18 +1181,27 @@ export async function getLatestBackup() {
   return list[0] ?? null
 }
 
-/** يبني Excel وينزّله ويسجّل اللوج — للدكتور بس، مرة كل شهر */
+/** يبني Excel بكل بيانات العيادة من أول يوم وينزّله — الإلزام مرة كل شهر للدكتور */
 export async function downloadClinicBackup() {
   const key = monthKey()
   const fileName = backupFileName(key)
-  const [patients, payments, visits, expenses] = await Promise.all([
+  const [patients, payments, visits, expenses, appointments, services] = await Promise.all([
     listPatients(),
     listPayments(),
     listAllVisits(),
     listAllExpenses(),
+    listAllAppointments(),
+    listServices(),
   ])
 
-  const buffer = await buildClinicWorkbook({ patients, visits, payments, expenses })
+  const buffer = await buildClinicWorkbook({
+    patients,
+    visits,
+    payments,
+    expenses,
+    appointments,
+    services,
+  })
   triggerXlsxDownload(buffer, fileName)
 
   const a = actor()

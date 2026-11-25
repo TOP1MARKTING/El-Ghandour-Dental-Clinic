@@ -49,8 +49,9 @@ export function BackupGate({ children }: { children: ReactNode }) {
         </span>
         <h1 className="mt-4 text-center text-xl font-bold sm:text-2xl">النسخة الاحتياطية إجبارية</h1>
         <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
-          لازم تنزل النسخة الاحتياطية بتاعة الشهر ده الأول عشان تقدر تشتغل. الملف فيه المرضى والزيارات
-          والكشوفات والمدفوعات والمصروفات — عشان بياناتك تبقى في أمان.
+          أول كل شهر لازم تنزل نسخة كاملة من بيانات العيادة عشان تقدر تشتغل. الملف فيه
+          <strong> كل حاجة من أول يوم اشتغل السيستم</strong>: المرضى، الزيارات، الكشوفات، المدفوعات،
+          المصروفات، المواعيد، والأسعار — مش شهر واحد بس.
         </p>
         <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
           اسم الملف: <span dir="ltr">{backupFileName(monthKey)}</span>
@@ -73,7 +74,7 @@ export function BackupGate({ children }: { children: ReactNode }) {
           {download.isPending ? 'جاري تجهيز الملف...' : 'تنزيل النسخة الاحتياطية'}
         </Button>
         <p className="mt-3 text-center text-[11px] text-muted-foreground">
-          الممرضات شغالين عادي — القفل ده للدكتور بس. أول كل شهر محتاج نسخة جديدة.
+          الممرضات شغالين عادي — القفل ده للدكتور بس. التنزيل إجباري أول كل شهر، والمحتوى دائمًا نسخة كاملة.
         </p>
       </div>
     </div>
@@ -108,7 +109,8 @@ export function BackupStatusCard() {
         {latest ? (
           <p className="truncate text-[11px] text-muted-foreground">
             {latest.patientsCount} مريض · {latest.visitsCount} زيارة · {latest.paymentsCount} دفعة
-            {monthBackup ? ' · نسخة الشهر ده تمام ✅' : ''}
+            {monthBackup ? ' · نسخة الشهر ده تمام ✅' : ' · لسه محتاج تنزيل الشهر ده'}
+            {' · الملف كامل من أول يوم'}
           </p>
         ) : null}
       </div>
@@ -120,7 +122,7 @@ export function BackupStatusCard() {
         onClick={() => void save()}
       >
         <Download className="size-4" />
-        {download.isPending ? 'جاري...' : 'تنزيل نسخة'}
+        {download.isPending ? 'جاري...' : 'تنزيل نسخة كاملة'}
       </Button>
     </div>
   )

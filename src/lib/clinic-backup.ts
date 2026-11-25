@@ -1,11 +1,11 @@
 import ExcelJS from 'exceljs'
 import { monthKey } from '@/lib/format'
-import type { Expense, Patient, Payment, Visit } from '@/types'
+import type { ClinicAppointment, Expense, Patient, Payment, Service, Visit } from '@/types'
 
-/** backup-11-2026.xlsx */
+/** backup-full-11-2026.xlsx — الشهر في الاسم = تاريخ التنزيل، والمحتوى = العيادة كلها */
 export function backupFileName(key = monthKey()) {
   const [y, m] = key.split('-')
-  return `backup-${m}-${y}.xlsx`
+  return `backup-full-${m}-${y}.xlsx`
 }
 
 function sheet(wb: ExcelJS.Workbook, name: string, headers: string[], rows: Array<Array<string | number>>) {
@@ -28,10 +28,13 @@ export async function buildClinicWorkbook(input: {
   visits: Visit[]
   payments: Payment[]
   expenses: Expense[]
+  appointments: ClinicAppointment[]
+  services: Service[]
 }) {
   const wb = new ExcelJS.Workbook()
   wb.creator = 'عيادة الغندور'
   wb.created = new Date()
+  const patientName = new Map(input.patients.map((p) => [p.id, p.name]))
 
   sheet(
     wb,
@@ -56,9 +59,9 @@ export async function buildClinicWorkbook(input: {
   sheet(
     wb,
     'الزيارات والكشوفات',
-    ['المريض', 'العلاج', 'السعر', 'المدفوع', 'خصم %', 'تاريخ', 'حساب قديم', 'ملاحظات', 'بواسطة'],
+    ['اسم المريض', 'العلاج', 'السعر', 'المدفوع', 'خصم %', 'تاريخ', 'حساب قديم', 'ملاحظات', 'بواسطة'],
     input.visits.map((v) => [
-      v.patientId,
+      patientName.get(v.patientId) ?? v.patientId,
       v.treatment,
       v.price,
       v.paidToday ?? 0,
@@ -82,6 +85,29 @@ export async function buildClinicWorkbook(input: {
     'المصروفات',
     ['النوع', 'المبلغ', 'ملاحظة', 'التاريخ'],
     input.expenses.map((x) => [x.category, x.amount, x.note, x.date]),
+  )
+
+  sheet(
+    wb,
+    'المواعيد',
+    ['المريض', 'الموبايل', 'التاريخ', 'الوقت', 'الحالة', 'الدكتور', 'ملاحظة', 'بواسطة'],
+    input.appointments.map((a) => [
+      a.patientName,
+      a.phone,
+      a.date,
+      a.time || '',
+      a.status,
+      a.doctor,
+      a.note,
+      a.by ?? '',
+    ]),
+  )
+
+  sheet(
+    wb,
+    'الأسعار',
+    ['الخدمة', 'السعر'],
+    input.services.map((s) => [s.name, s.price]),
   )
 
   return wb.xlsx.writeBuffer()
