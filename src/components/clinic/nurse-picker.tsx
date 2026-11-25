@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils'
 
 const NURSE_STORAGE_KEY = 'elghandour.nurse'
 
+/** لو الدكتور لسه ماضافش ممرضات — العمليات بتتسجل باسم الاستقبال */
+export const DEFAULT_ACTOR_WHEN_NO_NURSES = 'الاستقبال'
+
 export function getStoredNurse() {
   try {
     return localStorage.getItem(NURSE_STORAGE_KEY)?.trim() ?? ''
@@ -40,12 +43,22 @@ export function useSelectedNurse() {
     setStoredNurse(name)
   }
 
-  return { nurse, setNurse, nurses, loading: isLoading, ready: nurses.length > 0 }
+  const needsPick = nurses.length > 0
+  const picked = Boolean(nurse.trim() && nurses.includes(nurse))
+
+  return {
+    nurse,
+    setNurse,
+    nurses,
+    loading: isLoading,
+    /** فاضي = شغّال من غير اختيار · فيه أسماء = لازم اختيار */
+    ready: !isLoading && (!needsPick || picked),
+  }
 }
 
 export function requireNurseName(nurse: string, nurses: string[]) {
+  if (!nurses.length) return { ok: true as const, name: DEFAULT_ACTOR_WHEN_NO_NURSES }
   const name = nurse.trim()
-  if (!nurses.length) return { ok: false as const, error: 'الدكتور لسه ماضافش أسماء الممرضات من صفحة الممرضات' }
   if (!name || !nurses.includes(name)) return { ok: false as const, error: 'اختار اسم الممرضة اللي بتسجّل' }
   return { ok: true as const, name }
 }
@@ -65,8 +78,8 @@ export function NursePicker({
 }) {
   if (!nurses.length) {
     return (
-      <p className={cn('rounded-xl border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-sm font-semibold text-destructive', className)}>
-        الدكتور لسه ماضافش أسماء الممرضات من صفحة الممرضات
+      <p className={cn('rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground', className)}>
+        لسه مفيش أسماء ممرضات — التسجيل هيتم باسم «الاستقبال». لما الدكتور يضيف أسماء، لازم تختاري مين بتسجّل.
       </p>
     )
   }
