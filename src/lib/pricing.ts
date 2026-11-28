@@ -7,9 +7,12 @@ export const NEW_PATIENT_FEE_NAME = 'كشف'
 export const DEFAULT_SETTINGS: ClinicSettings = {
   newPatientFee: 150,
   discountPresets: [0, 10, 20],
-  expenseCategories: ['معمل', 'كهربا', 'إيجار', 'مرتبات', 'خامات وأدوات', 'مياه ونت', 'صيانة', 'أخرى'],
+  expenseCategories: ['معمل', 'كهرباء', 'إيجار', 'مرتبات', 'خامات وأدوات', 'مياه ونت', 'صيانة', 'أخرى'],
   nurses: [],
 }
+
+/** الأنواع الثابتة في الخزنة — «أخرى» بتفتح اسم حر */
+export const FIXED_EXPENSE_CATEGORIES = DEFAULT_SETTINGS.expenseCategories.filter((c) => c !== 'أخرى')
 
 export function clampPercent(value: number) {
   if (!Number.isFinite(value)) return 0

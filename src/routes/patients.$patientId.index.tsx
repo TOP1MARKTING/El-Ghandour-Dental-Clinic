@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
-import { dayKey, money, withWeekday } from '@/lib/format'
+import { dayKey, money, paidAtFromDayKey, withWeekday } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
 import {
   useCreatePayment,
@@ -26,12 +26,15 @@ import {
   usePatientPayments,
   usePatientVisits,
   useSetPatientDoctor,
+  useTodayKey,
   useTodayQueue,
   useUpdatePatient,
 } from '@/lib/clinic-hooks'
 import { DOCTORS } from '@/lib/doctors'
 import { DoctorBadge } from '@/components/clinic/doctors'
 import {
+  ArabicDatePicker,
+  AppointmentBadges,
   AppointmentForm,
   daysUntilLabel,
   formatAppointmentDay,
@@ -538,6 +541,9 @@ function AppointmentsPanel({ patientId, upcoming }: { patientId: string; upcomin
                     {formatAppointmentDay(a.date)}
                     {a.time ? ` · ${formatAppointmentTime(a.time)}` : ''}
                   </p>
+                  <div className="mt-0.5 flex flex-wrap gap-1">
+                    <AppointmentBadges appointment={a} />
+                  </div>
                   {a.note ? <p className="truncate text-xs text-muted-foreground">{a.note}</p> : null}
                 </div>
                 {daysUntilLabel(a.date) ? (
@@ -575,6 +581,8 @@ function QuickCollect({
   const [amount, setAmount] = useState('')
   const [saving, setSaving] = useState(false)
   const nursePick = useSelectedNurse()
+  const today = useTodayKey()
+  const [paidDay, setPaidDay] = useState(today)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -600,9 +608,11 @@ function QuickCollect({
         amount: value,
         method: 'نقدي',
         byName: nurse.name,
+        paidAtMs: paidAtFromDayKey(paidDay, today),
       })
       toast.success(`تم تحصيل ${money(value)} من ${patientName}`)
       setAmount('')
+      setPaidDay(today)
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء التحصيل'))
     } finally {
@@ -619,6 +629,10 @@ function QuickCollect({
         nurses={nursePick.nurses}
         className="mb-2"
       />
+      <div className="mb-2 grid gap-1 text-xs font-semibold">
+        تاريخ الدفع
+        <ArabicDatePicker past value={paidDay} onChange={setPaidDay} className="h-9 text-sm" />
+      </div>
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
           <input

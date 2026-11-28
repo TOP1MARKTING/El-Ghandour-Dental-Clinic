@@ -33,11 +33,22 @@ export type Payment = {
   by?: string
   /** الدكتور اللي الفلوس دي ليه — الدفعات القديمة من غيره وبتتحسب على دكتور المريض */
   doctor?: DoctorId
+  /** اتلغت من غير مسح — مش بتتحسب في الدخل */
+  cancelled?: boolean
+  cancelledAt?: number
+  cancelledBy?: string
+  visitId?: string
 }
 
 export type PaymentKind = 'كشف' | 'علاج' | 'دفعة'
 
 export type AppointmentStatus = 'upcoming' | 'arrived' | 'cancelled'
+
+/** من العيادة أو عن طريق التليفون — الحجوزات القديمة = من العيادة */
+export type BookingSource = 'clinic' | 'phone'
+
+/** دفع كشف / بدون دفع كشف — الحجوزات القديمة = دفع كشف */
+export type CheckupFeeStatus = 'paid' | 'unpaid'
 
 export type ClinicAppointment = {
   id: string
@@ -51,6 +62,8 @@ export type ClinicAppointment = {
   note: string
   status: AppointmentStatus
   doctor: DoctorId
+  bookingSource: BookingSource
+  checkupFeeStatus: CheckupFeeStatus
   createdAt: number
   /** آخر تغيير في الحالة (وصل / اتلغى) */
   updatedAt?: number
@@ -115,6 +128,45 @@ export type Expense = {
   date: string
   spentAt: number
   createdAt: number
+}
+
+/** سجل المعمل — حالات متبعتة للمعمل */
+export type LabEntry = {
+  id: string
+  /** YYYY-MM-DD */
+  dayKey: string
+  caseName: string
+  amount: number
+  note: string
+  date: string
+  spentAt: number
+  createdAt: number
+  by?: string
+}
+
+/** فاتورة خامات من مورد */
+export type MaterialInvoice = {
+  id: string
+  dayKey: string
+  name: string
+  total: number
+  date: string
+  createdAt: number
+  by?: string
+}
+
+/** حركة سداد/خصم على فاتورة خامات */
+export type MaterialMovement = {
+  id: string
+  invoiceId: string
+  dayKey: string
+  date: string
+  paid: number
+  discount: number
+  remainingAfter: number
+  note: string
+  createdAt: number
+  by?: string
 }
 
 export type QueueStatus = 'في الانتظار' | 'عند الدكتور' | 'بانتظار الحساب' | 'تم الكشف' | 'ملغي'

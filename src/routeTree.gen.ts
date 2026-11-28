@@ -12,7 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppointmentsRouteImport } from './routes/appointments'
 import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as LabRouteImport } from './routes/lab'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MaterialsRouteImport } from './routes/materials'
 import { Route as NursesRouteImport } from './routes/nurses'
 import { Route as PatientsRouteImport } from './routes/patients'
 import { Route as PaymentsRouteImport } from './routes/payments'
@@ -41,9 +43,19 @@ const FinanceRoute = FinanceRouteImport.update({
   path: '/finance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LabRoute = LabRouteImport.update({
+  id: '/lab',
+  path: '/lab',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaterialsRoute = MaterialsRouteImport.update({
+  id: '/materials',
+  path: '/materials',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NursesRoute = NursesRouteImport.update({
@@ -111,7 +123,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
+  '/lab': typeof LabRoute
   '/login': typeof LoginRoute
+  '/materials': typeof MaterialsRoute
   '/nurses': typeof NursesRoute
   '/patients': typeof PatientsRouteWithChildren
   '/payments': typeof PaymentsRouteWithChildren
@@ -129,7 +143,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
+  '/lab': typeof LabRoute
   '/login': typeof LoginRoute
+  '/materials': typeof MaterialsRoute
   '/nurses': typeof NursesRoute
   '/services': typeof ServicesRoute
   '/check-in/followup': typeof CheckInFollowupRoute
@@ -145,7 +161,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/appointments': typeof AppointmentsRoute
   '/finance': typeof FinanceRoute
+  '/lab': typeof LabRoute
   '/login': typeof LoginRoute
+  '/materials': typeof MaterialsRoute
   '/nurses': typeof NursesRoute
   '/patients': typeof PatientsRouteWithChildren
   '/payments': typeof PaymentsRouteWithChildren
@@ -165,7 +183,9 @@ export interface FileRouteTypes {
     | '/'
     | '/appointments'
     | '/finance'
+    | '/lab'
     | '/login'
+    | '/materials'
     | '/nurses'
     | '/patients'
     | '/payments'
@@ -183,7 +203,9 @@ export interface FileRouteTypes {
     | '/'
     | '/appointments'
     | '/finance'
+    | '/lab'
     | '/login'
+    | '/materials'
     | '/nurses'
     | '/services'
     | '/check-in/followup'
@@ -198,7 +220,9 @@ export interface FileRouteTypes {
     | '/'
     | '/appointments'
     | '/finance'
+    | '/lab'
     | '/login'
+    | '/materials'
     | '/nurses'
     | '/patients'
     | '/payments'
@@ -217,7 +241,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppointmentsRoute: typeof AppointmentsRoute
   FinanceRoute: typeof FinanceRoute
+  LabRoute: typeof LabRoute
   LoginRoute: typeof LoginRoute
+  MaterialsRoute: typeof MaterialsRoute
   NursesRoute: typeof NursesRoute
   PatientsRoute: typeof PatientsRouteWithChildren
   PaymentsRoute: typeof PaymentsRouteWithChildren
@@ -249,11 +275,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lab': {
+      id: '/lab'
+      path: '/lab'
+      fullPath: '/lab'
+      preLoaderRoute: typeof LabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/materials': {
+      id: '/materials'
+      path: '/materials'
+      fullPath: '/materials'
+      preLoaderRoute: typeof MaterialsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/nurses': {
@@ -388,7 +428,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppointmentsRoute: AppointmentsRoute,
   FinanceRoute: FinanceRoute,
+  LabRoute: LabRoute,
   LoginRoute: LoginRoute,
+  MaterialsRoute: MaterialsRoute,
   NursesRoute: NursesRoute,
   PatientsRoute: PatientsRouteWithChildren,
   PaymentsRoute: PaymentsRouteWithChildren,

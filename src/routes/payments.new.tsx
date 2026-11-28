@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
-import { money } from '@/lib/format'
+import { money, paidAtFromDayKey } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
-import { useCreatePayment, usePatients } from '@/lib/clinic-hooks'
+import { useCreatePayment, usePatients, useTodayKey } from '@/lib/clinic-hooks'
+import { ArabicDatePicker } from '@/components/clinic/appointments'
 import { Field } from '@/components/clinic/ui'
 import { FormPage, inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
@@ -38,10 +39,16 @@ function AddPayment() {
   const [patientId, setPatientId] = useState(initialPatient ?? '')
   const [saving, setSaving] = useState(false)
   const nursePick = useSelectedNurse()
+  const today = useTodayKey()
+  const [paidDay, setPaidDay] = useState(today)
 
   useEffect(() => {
     if (initialPatient) setPatientId(initialPatient)
   }, [initialPatient])
+
+  useEffect(() => {
+    setPaidDay(today)
+  }, [today])
 
   const selected = useMemo(() => patients.find((p) => p.id === patientId), [patients, patientId])
   const remaining = selected ? patientBalance(selected) : 0
@@ -76,6 +83,7 @@ function AddPayment() {
         amount,
         method: 'نقدي',
         byName: nurse.name,
+        paidAtMs: paidAtFromDayKey(paidDay, today),
       })
       toast.success('تم تسجيل الدفعة ✅')
       void nav({ to: '/patients/$patientId', params: { patientId } })
@@ -118,7 +126,7 @@ function AddPayment() {
         </p>
       ) : null}
 
-      <Field dense label="المبلغ المدفوع" className="sm:col-span-2">
+      <Field dense label="المبلغ المدفوع">
         <input
           className={inputClass}
           name="amount"
@@ -130,6 +138,12 @@ function AddPayment() {
           placeholder="0"
         />
       </Field>
+
+      <div className="grid gap-1 text-sm font-semibold">
+        تاريخ الدفع
+        <ArabicDatePicker past value={paidDay} onChange={setPaidDay} />
+        <p className="text-[11px] font-normal text-muted-foreground">بيتحسب في دخل يوم الدفع ده</p>
+      </div>
     </FormPage>
   )
 }

@@ -24,14 +24,25 @@ import {
 } from 'firebase/firestore'
 import { getAuthClient, getDb } from '@/lib/backend'
 import { addDays, dayKey, formatArabicDate, formatArabicDateTime, formatClock, monthKey, relativeDayLabel } from '@/lib/format'
-import { applyDiscount, clampPercent, DEFAULT_SETTINGS, NEW_PATIENT_FEE_NAME } from '@/lib/pricing'
+import {
+  applyDiscount,
+  clampPercent,
+  DEFAULT_SETTINGS,
+  FIXED_EXPENSE_CATEGORIES,
+  NEW_PATIENT_FEE_NAME,
+} from '@/lib/pricing'
 import { toDoctorId, type DoctorId } from '@/lib/doctors'
 import type {
   AppointmentStatus,
   BackupLog,
+  BookingSource,
+  CheckupFeeStatus,
   ClinicAppointment,
   ClinicSettings,
   Expense,
+  LabEntry,
+  MaterialInvoice,
+  MaterialMovement,
   Patient,
   Payment,
   PaymentKind,
@@ -138,6 +149,8 @@ function paymentKindOf(value: unknown): PaymentKind {
 }
 
 function mapPayment(id: string, data: DocumentData): Payment {
+  const cancelledAt = Number(data['cancelledAtMs'] ?? 0)
+  const cancelledBy = String(data['cancelledByName'] ?? '').trim()
   return {
     id,
     patientId: String(data['patientId'] ?? ''),
@@ -149,8 +162,17 @@ function mapPayment(id: string, data: DocumentData): Payment {
     kind: paymentKindOf(data['kind']),
     createdAt: Number(data['createdAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
+    cancelled: Boolean(data['cancelled']),
+    ...(cancelledAt ? { cancelledAt } : {}),
+    ...(cancelledBy ? { cancelledBy } : {}),
+    ...(data['visitId'] ? { visitId: String(data['visitId']) } : {}),
     ...(data['doctor'] ? { doctor: toDoctorId(data['doctor']) } : {}),
   }
+}
+
+/** الدفعات النشطة اللي بتدخل في الدخل والتقارير */
+export function isActivePayment(p: Pick<Payment, 'cancelled'>) {
+  return !p.cancelled
 }
 
 function normalizeQueueStatus(raw: string): QueueStatus {
@@ -474,11 +496,14 @@ export async function createPayment(input: {
   method?: string
   note?: string
   byName: string
+  /** وقت الدفع الفعلي للدخل — افتراضي دلوقتي */
+  paidAtMs?: number
 }) {
   const byName = requireByName(input.byName)
   const db = getDb()
   let remaining = 0
   let paidAmount = 0
+  const paidAt = Number.isFinite(input.paidAtMs) ? Math.round(input.paidAtMs as number) : Date.now()
 
   await runTransaction(db, async (tx) => {
     const patientRef = doc(db, 'patients', input.patientId)
@@ -501,7 +526,7 @@ export async function createPayment(input: {
         amount,
         kind: 'دفعة',
         doctor: patient.doctor,
-        now: Date.now(),
+        now: paidAt,
         byName,
         ...(input.method ? { method: input.method } : {}),
         ...(input.note ? { note: input.note } : {}),
@@ -558,26 +583,54 @@ export async function deleteVisit(visitId: string) {
   return { patientId }
 }
 
-/** تصحيح غلطة: بيمسح دفعة من الباقي وبيرجّعها على المريض */
-export async function deletePayment(paymentId: string) {
+/** إلغاء دفعة: متتمسحش — بتتعلم ملغاة وتتشال من الدخل والإجمالي */
+export async function cancelPayment(paymentId: string) {
   const db = getDb()
   let patientId = ''
   await runTransaction(db, async (tx) => {
     const paymentRef = doc(db, 'payments', paymentId)
     const paymentSnap = await tx.get(paymentRef)
-    if (!paymentSnap.exists()) throw new Error('الدفعة دي اتمسحت قبل كده')
+    if (!paymentSnap.exists()) throw new Error('الدفعة مش موجودة')
     const x = paymentSnap.data()
-    if (paymentKindOf(x['kind']) !== 'دفعة') throw new Error('الدفعة دي متسجلة مع علاج — امسح العلاج نفسه')
+    if (Boolean(x['cancelled'])) throw new Error('الدفعة دي ملغاة قبل كده')
     patientId = String(x['patientId'] ?? '')
-    const patientRef = doc(db, 'patients', patientId)
-    const patientSnap = await tx.get(patientRef)
-    tx.delete(paymentRef)
-    if (patientSnap.exists()) {
-      const patient = mapPatient(patientSnap.id, patientSnap.data())
-      tx.update(patientRef, { ...touch(), paid: Math.max(0, patient.paid - Number(x['amount'] ?? 0)) })
+    const amount = Number(x['amount'] ?? 0)
+    const visitId = String(x['visitId'] ?? '')
+    const a = actor()
+    const now = Date.now()
+
+    tx.update(paymentRef, {
+      cancelled: true,
+      cancelledAtMs: now,
+      cancelledBy: a.email,
+      cancelledByName: a.name,
+      ...touch(),
+    })
+
+    if (patientId) {
+      const patientRef = doc(db, 'patients', patientId)
+      const patientSnap = await tx.get(patientRef)
+      if (patientSnap.exists()) {
+        const patient = mapPatient(patientSnap.id, patientSnap.data())
+        tx.update(patientRef, { ...touch(), paid: Math.max(0, patient.paid - amount) })
+      }
+    }
+
+    if (visitId) {
+      const visitRef = doc(db, 'visits', visitId)
+      const visitSnap = await tx.get(visitRef)
+      if (visitSnap.exists()) {
+        const paidToday = Math.max(0, Number(visitSnap.data()['paidToday'] ?? 0) - amount)
+        tx.update(visitRef, { paidToday, ...touch() })
+      }
     }
   })
   return { patientId }
+}
+
+/** @deprecated استخدم cancelPayment — موجود للتوافق */
+export async function deletePayment(paymentId: string) {
+  return cancelPayment(paymentId)
 }
 
 export async function updatePatient(input: {
@@ -799,6 +852,8 @@ export async function checkInFollowupPatient(input: {
   charge?: ChargeInput
   /** دفعة من الحساب القديم — بتتسجل مع الحضور في نفس الحفظة */
   oldPayment?: number
+  /** تاريخ دخل سداد الحساب القديم — افتراضي وقت الحضور */
+  oldPaymentAtMs?: number
   /** هيدخل لمين النهاردة — لو مش متحدد يبقى دكتوره المتابع */
   doctor?: DoctorId
   byName: string
@@ -818,6 +873,10 @@ export async function checkInFollowupPatient(input: {
 
   const reason = input.reason?.trim() || patient.problem?.trim() || 'متابعة'
   const now = Date.now()
+  const oldPaidAt =
+    Number.isFinite(input.oldPaymentAtMs) && (input.oldPaymentAtMs as number) > 0
+      ? Math.round(input.oldPaymentAtMs as number)
+      : now + 2
   const queueRef = doc(collection(db, 'queue'))
   const doctor = input.doctor ? toDoctorId(input.doctor) : patient.doctor
   const charge =
@@ -872,7 +931,7 @@ export async function checkInFollowupPatient(input: {
         kind: 'دفعة',
         doctor: patient.doctor,
         note: 'من الحساب القديم',
-        now: now + 2,
+        now: oldPaidAt,
         byName,
       }),
     )
@@ -940,8 +999,9 @@ export async function createExpense(input: {
   spentAt: Date
 }) {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('أدخل مبلغ صحيح')
+  const category = input.category.trim() || 'أخرى'
   await addDoc(collection(getDb(), 'expenses'), {
-    category: input.category.trim() || 'أخرى',
+    category,
     amount: Math.round(input.amount),
     note: input.note?.trim() ?? '',
     date: formatArabicDate(input.spentAt),
@@ -951,6 +1011,24 @@ export async function createExpense(input: {
     createdAt: serverTimestamp(),
     ...stamp(),
   })
+  if (category !== 'أخرى') await rememberExpenseCategory(category)
+}
+
+/** يحفظ النوع الحر ضمن اقتراحات الخزنة للمرات الجاية */
+async function rememberExpenseCategory(category: string) {
+  try {
+    const settings = await getClinicSettings()
+    if (settings.expenseCategories.includes(category)) return
+    const fixed = new Set(FIXED_EXPENSE_CATEGORIES)
+    const customs = settings.expenseCategories.filter((c) => c !== 'أخرى' && !fixed.has(c))
+    if (!customs.includes(category)) customs.push(category)
+    await saveClinicSettings({
+      ...settings,
+      expenseCategories: [...FIXED_EXPENSE_CATEGORIES, ...customs, 'أخرى'],
+    })
+  } catch {
+    /* الاقتراح مش أساسي لو الإعدادات فشلت */
+  }
 }
 
 export async function deleteExpense(id: string) {
@@ -972,6 +1050,7 @@ export async function listFinanceSince(sinceMs: number, untilMs?: number) {
   return {
     payments: paymentsSnap.docs
       .map((d) => mapPayment(d.id, d.data()))
+      .filter(isActivePayment)
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
     expenses: expensesSnap.docs
       .map((d) => mapExpense(d.id, d.data()))
@@ -987,6 +1066,14 @@ export async function listPaymentsForPatient(patientId: string) {
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 }
 
+function bookingSourceOf(value: unknown): BookingSource {
+  return value === 'phone' ? 'phone' : 'clinic'
+}
+
+function checkupFeeStatusOf(value: unknown): CheckupFeeStatus {
+  return value === 'unpaid' ? 'unpaid' : 'paid'
+}
+
 function mapAppointment(id: string, data: DocumentData): ClinicAppointment {
   const status = String(data['status'] ?? 'upcoming')
   return {
@@ -999,6 +1086,9 @@ function mapAppointment(id: string, data: DocumentData): ClinicAppointment {
     note: String(data['note'] ?? ''),
     status: status === 'arrived' || status === 'cancelled' ? status : 'upcoming',
     doctor: toDoctorId(data['doctor']),
+    /** الحجوزات القديمة من غير الحقل = من العيادة + دفع كشف */
+    bookingSource: bookingSourceOf(data['bookingSource']),
+    checkupFeeStatus: checkupFeeStatusOf(data['checkupFeeStatus']),
     createdAt: Number(data['createdAtMs'] ?? 0),
     updatedAt: Number(data['updatedAtMs'] ?? 0),
     by: String(data['createdByName'] ?? ''),
@@ -1015,6 +1105,8 @@ export async function createAppointment(input: {
   note?: string
   /** لو مش متحدد يبقى دكتور المريض المتابع */
   doctor?: DoctorId
+  bookingSource?: BookingSource
+  checkupFeeStatus?: CheckupFeeStatus
 }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error('اختار تاريخ الموعد')
   if (input.date < dayKey()) throw new Error('التاريخ ده عدى — اختار يوم جاي')
@@ -1029,6 +1121,8 @@ export async function createAppointment(input: {
     return a.date === input.date && a.status === 'upcoming'
   })
   if (sameDay) throw new Error('المريض ده عنده موعد في اليوم ده بالفعل')
+  const bookingSource = input.bookingSource === 'phone' ? 'phone' : 'clinic'
+  const checkupFeeStatus = input.checkupFeeStatus === 'unpaid' ? 'unpaid' : 'paid'
   await addDoc(collection(db, 'appointments'), {
     patientId: patient.id,
     patientName: patient.name,
@@ -1038,10 +1132,58 @@ export async function createAppointment(input: {
     time: input.time?.trim() ?? '',
     note: input.note?.trim() ?? '',
     status: 'upcoming',
+    bookingSource,
+    checkupFeeStatus,
     createdAtMs: Date.now(),
     createdAt: serverTimestamp(),
     ...stamp(),
   })
+}
+
+/** تحويل «بدون دفع كشف» → دفع كشف + تسجيل المبلغ في الدخل */
+export async function markAppointmentCheckupPaid(input: {
+  appointmentId: string
+  amount: number
+  byName: string
+  paidAtMs?: number
+}) {
+  const byName = requireByName(input.byName)
+  const amount = Math.round(input.amount)
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('أدخل مبلغ الكشف')
+  const paidAt = Number.isFinite(input.paidAtMs) ? Math.round(input.paidAtMs as number) : Date.now()
+  const db = getDb()
+  const appointmentRef = doc(db, 'appointments', input.appointmentId)
+  const snap = await getDoc(appointmentRef)
+  if (!snap.exists()) throw new Error('الموعد غير موجود')
+  const appointment = mapAppointment(snap.id, snap.data())
+  if (appointment.checkupFeeStatus === 'paid') throw new Error('الكشف ده متسجل مدفوع قبل كده')
+  const patient = await getPatient(appointment.patientId)
+  if (!patient) throw new Error('المريض غير موجود')
+
+  const charge = visitWrites(db, {
+    patientId: patient.id,
+    patientName: patient.name,
+    treatment: NEW_PATIENT_FEE_NAME,
+    doctorId: appointment.doctor,
+    basePrice: amount,
+    paidToday: amount,
+    now: paidAt,
+    byName,
+  })
+
+  const batch = writeBatch(db)
+  for (const [ref, data] of charge.writes) batch.set(ref, data)
+  batch.update(doc(db, 'patients', patient.id), {
+    ...touch(),
+    total: increment(charge.final),
+    paid: increment(charge.paid),
+  })
+  batch.update(appointmentRef, {
+    checkupFeeStatus: 'paid',
+    ...touch(),
+  })
+  await batch.commit()
+  return { amount: charge.paid, patientId: patient.id }
 }
 
 /** المواعيد من النهاردة لحد 90 يوم قدام (من غير ما نسحب سنين قدام) */
@@ -1098,12 +1240,28 @@ function nursesList(value: unknown) {
   return [...new Set(value.map((v) => String(v ?? '').trim()).filter(Boolean))]
 }
 
+function normalizeExpenseCategories(list: string[]) {
+  const renamed = list.map((c) => (c === 'كهربا' ? 'كهرباء' : c))
+  const fixed = FIXED_EXPENSE_CATEGORIES
+  const customs = renamed.filter((c) => c !== 'أخرى' && !fixed.includes(c))
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const c of [...fixed, ...customs, 'أخرى']) {
+    if (seen.has(c)) continue
+    seen.add(c)
+    out.push(c)
+  }
+  return out
+}
+
 function mapSettings(data: DocumentData | undefined): ClinicSettings {
   const fee = Number(data?.['newPatientFee'])
   return {
     newPatientFee: Number.isFinite(fee) && fee >= 0 ? Math.round(fee) : DEFAULT_SETTINGS.newPatientFee,
     discountPresets: numberList(data?.['discountPresets'], DEFAULT_SETTINGS.discountPresets),
-    expenseCategories: textList(data?.['expenseCategories'], DEFAULT_SETTINGS.expenseCategories),
+    expenseCategories: normalizeExpenseCategories(
+      textList(data?.['expenseCategories'], DEFAULT_SETTINGS.expenseCategories),
+    ),
     nurses: nursesList(data?.['nurses']),
   }
 }
@@ -1161,6 +1319,186 @@ async function listAllExpenses() {
 async function listAllAppointments() {
   const snap = await getDocs(collection(getDb(), 'appointments'))
   return snap.docs.map((d) => mapAppointment(d.id, d.data()))
+}
+
+function mapLabEntry(id: string, data: DocumentData): LabEntry {
+  return {
+    id,
+    dayKey: String(data['dayKey'] ?? ''),
+    caseName: String(data['caseName'] ?? ''),
+    amount: Number(data['amount'] ?? 0),
+    note: String(data['note'] ?? ''),
+    date: String(data['date'] ?? ''),
+    spentAt: Number(data['spentAtMs'] ?? data['createdAtMs'] ?? 0),
+    createdAt: Number(data['createdAtMs'] ?? 0),
+    by: String(data['createdByName'] ?? ''),
+  }
+}
+
+export async function listLabEntries() {
+  const snap = await getDocs(collection(getDb(), 'labEntries'))
+  return snap.docs.map((d) => mapLabEntry(d.id, d.data())).sort((a, b) => b.spentAt - a.spentAt)
+}
+
+export async function createLabEntry(input: {
+  caseName: string
+  amount: number
+  spentAt: Date
+  note?: string
+}) {
+  const caseName = input.caseName.trim()
+  if (!caseName) throw new Error('اكتب اسم الحالة')
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error('أدخل مبلغ صحيح')
+  await addDoc(collection(getDb(), 'labEntries'), {
+    caseName,
+    amount: Math.round(input.amount),
+    note: input.note?.trim() ?? '',
+    date: formatArabicDate(input.spentAt),
+    dayKey: dayKey(input.spentAt),
+    spentAtMs: input.spentAt.getTime(),
+    createdAtMs: Date.now(),
+    createdAt: serverTimestamp(),
+    ...stamp(),
+  })
+}
+
+export async function deleteLabEntry(id: string) {
+  await deleteDoc(doc(getDb(), 'labEntries', id))
+}
+
+function mapMaterialInvoice(id: string, data: DocumentData): MaterialInvoice {
+  return {
+    id,
+    dayKey: String(data['dayKey'] ?? ''),
+    name: String(data['name'] ?? ''),
+    total: Number(data['total'] ?? 0),
+    date: String(data['date'] ?? ''),
+    createdAt: Number(data['createdAtMs'] ?? 0),
+    by: String(data['createdByName'] ?? ''),
+  }
+}
+
+function mapMaterialMovement(id: string, data: DocumentData): MaterialMovement {
+  return {
+    id,
+    invoiceId: String(data['invoiceId'] ?? ''),
+    dayKey: String(data['dayKey'] ?? ''),
+    date: String(data['date'] ?? ''),
+    paid: Number(data['paid'] ?? 0),
+    discount: Number(data['discount'] ?? 0),
+    remainingAfter: Number(data['remainingAfter'] ?? 0),
+    note: String(data['note'] ?? ''),
+    createdAt: Number(data['createdAtMs'] ?? 0),
+    by: String(data['createdByName'] ?? ''),
+  }
+}
+
+export async function listMaterialInvoices() {
+  const snap = await getDocs(collection(getDb(), 'materialInvoices'))
+  return snap.docs.map((d) => mapMaterialInvoice(d.id, d.data())).sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function listMaterialMovements() {
+  const snap = await getDocs(collection(getDb(), 'materialMovements'))
+  return snap.docs.map((d) => mapMaterialMovement(d.id, d.data())).sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function createMaterialInvoice(input: {
+  name: string
+  total: number
+  spentAt: Date
+  paid?: number
+  discount?: number
+}) {
+  const name = input.name.trim()
+  if (!name) throw new Error('اكتب اسم المورد أو الفاتورة')
+  const total = Math.round(input.total)
+  if (!Number.isFinite(total) || total <= 0) throw new Error('أدخل إجمالي الفاتورة')
+  const paid = Math.max(0, Math.round(input.paid ?? 0))
+  const discount = Math.max(0, Math.round(input.discount ?? 0))
+  if (paid + discount > total) throw new Error('المدفوع والخصم أكبر من إجمالي الفاتورة')
+
+  const db = getDb()
+  const invoiceRef = doc(collection(db, 'materialInvoices'))
+  const spentAt = input.spentAt
+  const now = Date.now()
+  const remaining = total - paid - discount
+  const batch = writeBatch(db)
+  batch.set(invoiceRef, {
+    name,
+    total,
+    date: formatArabicDate(spentAt),
+    dayKey: dayKey(spentAt),
+    createdAtMs: now,
+    createdAt: serverTimestamp(),
+    ...stamp(),
+  })
+  if (paid > 0 || discount > 0) {
+    batch.set(doc(collection(db, 'materialMovements')), {
+      invoiceId: invoiceRef.id,
+      paid,
+      discount,
+      remainingAfter: remaining,
+      note: 'أول تسجيل للفاتورة',
+      date: formatArabicDate(spentAt),
+      dayKey: dayKey(spentAt),
+      createdAtMs: now + 1,
+      createdAt: serverTimestamp(),
+      ...stamp(),
+    })
+  }
+  await batch.commit()
+  return { id: invoiceRef.id }
+}
+
+export async function addMaterialMovement(input: {
+  invoiceId: string
+  paid?: number
+  discount?: number
+  note?: string
+  spentAt: Date
+}) {
+  const paid = Math.max(0, Math.round(input.paid ?? 0))
+  const discount = Math.max(0, Math.round(input.discount ?? 0))
+  if (paid <= 0 && discount <= 0) throw new Error('سجّل مبلغ مدفوع أو خصم')
+
+  const db = getDb()
+  const invoiceRef = doc(db, 'materialInvoices', input.invoiceId)
+  const [invoiceSnap, movesSnap] = await Promise.all([
+    getDoc(invoiceRef),
+    getDocs(query(collection(db, 'materialMovements'), where('invoiceId', '==', input.invoiceId))),
+  ])
+  if (!invoiceSnap.exists()) throw new Error('الفاتورة مش موجودة')
+  const invoice = mapMaterialInvoice(invoiceSnap.id, invoiceSnap.data())
+  const settled = movesSnap.docs.reduce((s, d) => {
+    const m = d.data()
+    return s + Number(m['paid'] ?? 0) + Number(m['discount'] ?? 0)
+  }, 0)
+  const due = Math.max(0, invoice.total - settled)
+  if (paid + discount > due) throw new Error(`المبلغ أكبر من المتبقي (${due.toLocaleString('en-EG')} جنيه)`)
+  const remainingAfter = due - paid - discount
+  await addDoc(collection(db, 'materialMovements'), {
+    invoiceId: input.invoiceId,
+    paid,
+    discount,
+    remainingAfter,
+    note: input.note?.trim() ?? '',
+    date: formatArabicDate(input.spentAt),
+    dayKey: dayKey(input.spentAt),
+    createdAtMs: Date.now(),
+    createdAt: serverTimestamp(),
+    ...stamp(),
+  })
+  return { remainingAfter }
+}
+
+export async function deleteMaterialInvoice(id: string) {
+  const db = getDb()
+  const moves = await getDocs(query(collection(db, 'materialMovements'), where('invoiceId', '==', id)))
+  const batch = writeBatch(db)
+  batch.delete(doc(db, 'materialInvoices', id))
+  for (const d of moves.docs) batch.delete(d.ref)
+  await batch.commit()
 }
 
 /** هل الدكتور نزّل نسخة الشهر ده؟ (dayKey هنا = YYYY-MM) — عدد قليل في الشهر، ترتيب على الكلاينت */

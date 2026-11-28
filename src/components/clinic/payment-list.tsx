@@ -1,10 +1,14 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
-import { Stethoscope, Wallet } from 'lucide-react'
+import { Ban, Stethoscope, Wallet } from 'lucide-react'
+import { toast } from 'sonner'
 import { ToothIcon } from '@/components/clinic/dental-icons'
 import { actorLabel } from '@/lib/auth-context'
+import { errorText } from '@/lib/api-errors'
+import { useCancelPayment, useIsAdmin } from '@/lib/clinic-hooks'
 import { groupByDay, money, timeLabel, withWeekday } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { isActivePayment } from '@/lib/clinic-api'
 import type { Payment, PaymentKind } from '@/types'
 
 export const KIND_LABEL: Record<PaymentKind, string> = {
@@ -67,6 +71,7 @@ export function PaymentList({
   nameOf = (p) => p.patient,
   twoColumns = false,
   className,
+  allowCancel = false,
 }: {
   payments: Payment[]
   dayHeaders?: boolean
@@ -74,6 +79,7 @@ export function PaymentList({
   /** الأيام تتوزع على عمودين في الشاشات الكبيرة */
   twoColumns?: boolean
   className?: string
+  allowCancel?: boolean
 }) {
   return (
     <div className={cn('grid grid-cols-1 content-start items-start gap-3', twoColumns && 'lg:grid-cols-2', className)}>
@@ -82,12 +88,16 @@ export function PaymentList({
           {dayHeaders ? (
             <p className="mb-1.5 flex items-center justify-between text-xs font-bold text-muted-foreground">
               <span>{group.label}</span>
-              <span className="text-success">{money(group.items.reduce((s, p) => s + p.amount, 0))}</span>
+              <span className="text-success">
+                {money(group.items.filter(isActivePayment).reduce((s, p) => s + p.amount, 0))}
+              </span>
             </p>
           ) : null}
           <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
-            {group.items.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-3 py-2">
+            {group.items.map((p) => {
+              const cancelled = Boolean(p.cancelled)
+              return (
+              <li key={p.id} className={cn('flex items-center gap-3 px-3 py-2', cancelled && 'opacity-60')}>
                 <span className={cn('grid size-9 shrink-0 place-items-center rounded-full', KIND_STYLE[p.kind].tone)}>
                   {KIND_STYLE[p.kind].icon}
                 </span>
@@ -102,6 +112,7 @@ export function PaymentList({
                   <p className="truncate text-xs text-muted-foreground">
                     {[
                       KIND_LABEL[p.kind],
+                      cancelled ? 'ملغاة' : '',
                       p.note,
                       p.method && p.method !== 'نقدي' ? p.method : '',
                       p.by ? `بواسطة ${actorLabel(p.by)}` : '',
@@ -111,16 +122,58 @@ export function PaymentList({
                   </p>
                 </div>
                 <div className="shrink-0 text-end">
-                  <p className="font-display text-sm font-semibold text-success">+{money(p.amount)}</p>
+                  <p
+                    className={cn(
+                      'font-display text-sm font-semibold',
+                      cancelled ? 'text-muted-foreground line-through' : 'text-success',
+                    )}
+                  >
+                    +{money(p.amount)}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {p.createdAt ? timeLabel(p.createdAt) : withWeekday(p.date, p.createdAt)}
+                    {cancelled && p.cancelledAt
+                      ? `اتلغت ${timeLabel(p.cancelledAt)}`
+                      : p.createdAt
+                        ? timeLabel(p.createdAt)
+                        : withWeekday(p.date, p.createdAt)}
                   </p>
                 </div>
+                {allowCancel && !cancelled ? <CancelPaymentButton paymentId={p.id} amount={p.amount} /> : null}
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       ))}
     </div>
+  )
+}
+
+function CancelPaymentButton({ paymentId, amount }: { paymentId: string; amount: number }) {
+  const admin = useIsAdmin()
+  const cancel = useCancelPayment()
+  if (!admin) return null
+
+  const run = async () => {
+    if (!window.confirm(`تلغي الدفعة ${money(amount)}؟\nهتتشال من الدخل وهتفضل ظاهرة في السجل.`)) return
+    try {
+      await cancel.mutateAsync(paymentId)
+      toast.success('اتلغت الدفعة ✅')
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء الإلغاء'))
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void run()}
+      disabled={cancel.isPending}
+      className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-rose-50 hover:text-destructive disabled:opacity-40"
+      title="إلغاء الدفعة"
+      aria-label="إلغاء الدفعة"
+    >
+      <Ban className="size-4" />
+    </button>
   )
 }

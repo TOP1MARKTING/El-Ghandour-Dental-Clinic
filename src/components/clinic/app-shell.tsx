@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { CalendarDays, LogOut, Menu } from 'lucide-react'
+import { CalendarDays, FlaskConical, LogOut, Menu, Package } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -55,6 +55,18 @@ const adminItems = [
     icon: PatientFileIcon,
     match: (path: string) => path.startsWith('/nurses'),
   },
+  {
+    to: '/lab' as const,
+    label: 'المعمل',
+    icon: FlaskConical,
+    match: (path: string) => path.startsWith('/lab'),
+  },
+  {
+    to: '/materials' as const,
+    label: 'الخامات',
+    icon: Package,
+    match: (path: string) => path.startsWith('/materials'),
+  },
 ]
 
 function BootScreen() {
@@ -96,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (loading || !user) return <BootScreen />
 
   const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
-  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services', '/nurses'].includes(path)
+  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services', '/nurses', '/lab', '/materials'].includes(path)
   const profilePage = /^\/patients\/[^/]+$/.test(path) && !formPage
   const fitHeight = formPage || listPage || profilePage
   const initial = user.name.replace(/^د\.\s*/, '').trim().charAt(0) || 'د'

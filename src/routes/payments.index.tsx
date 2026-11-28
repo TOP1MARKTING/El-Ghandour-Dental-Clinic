@@ -59,7 +59,8 @@ function Payments() {
 
   const periods = useMemo(() => {
     const list = recentPayments ?? []
-    const sum = (from: number) => list.reduce((s, p) => ((p.createdAt ?? 0) >= from ? s + p.amount : s), 0)
+    const sum = (from: number) =>
+      list.reduce((s, p) => ((p.createdAt ?? 0) >= from && !p.cancelled ? s + p.amount : s), 0)
     return [
       { id: 'day', label: 'النهاردة', total: sum(bounds.day) },
       { id: 'week', label: 'الأسبوع ده', total: sum(bounds.week) },
@@ -162,6 +163,7 @@ function Payments() {
           payments={list}
           nameOf={nameOf}
           twoColumns
+          allowCancel
           className="mt-3 min-h-0 flex-1 overflow-auto pe-1"
         />
       )}

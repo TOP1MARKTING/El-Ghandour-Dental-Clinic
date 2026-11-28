@@ -141,22 +141,27 @@ function RemoveEntry({
   amount?: string | undefined
 }) {
   const removeVisit = useDeleteVisit()
-  const removePayment = useDeletePayment()
-  const busy = removeVisit.isPending || removePayment.isPending
+  const cancelPayment = useDeletePayment()
+  const busy = removeVisit.isPending || cancelPayment.isPending
 
   const remove = async () => {
-    const what = entry.kind === 'visit' ? `«${title}»${amount ? ` (${amount})` : ''}` : `دفعة ${amount ?? ''}`
-    const effect =
-      entry.kind === 'visit'
-        ? 'سعره هيتشال من حساب المريض، ولو كان دفع معاه الدفعة هتتمسح كمان.'
-        : 'المبلغ هيرجع تاني على المريض.'
-    if (!window.confirm(`تمسح ${what}؟\n${effect}`)) return
+    if (entry.kind === 'visit') {
+      const what = `«${title}»${amount ? ` (${amount})` : ''}`
+      if (!window.confirm(`تمسح ${what}؟\nسعره هيتشال من حساب المريض، ولو كان دفع معاه الدفعة هتتمسح كمان.`)) return
+      try {
+        await removeVisit.mutateAsync(entry.id)
+        toast.success('اتمسح واتظبط الحساب ✅')
+      } catch (err) {
+        toast.error(errorText(err, 'حصل خطأ أثناء المسح'))
+      }
+      return
+    }
+    if (!window.confirm(`تلغي دفعة ${amount ?? ''}؟\nهتتشال من الدخل وهتفضل ظاهرة في السجل كملغاة.`)) return
     try {
-      if (entry.kind === 'visit') await removeVisit.mutateAsync(entry.id)
-      else await removePayment.mutateAsync(entry.id)
-      toast.success('اتمسح واتظبط الحساب ✅')
+      await cancelPayment.mutateAsync(entry.id)
+      toast.success('اتلغت الدفعة واتشالت من الدخل ✅')
     } catch (err) {
-      toast.error(errorText(err, 'حصل خطأ أثناء المسح'))
+      toast.error(errorText(err, 'حصل خطأ أثناء الإلغاء'))
     }
   }
 
@@ -166,8 +171,8 @@ function RemoveEntry({
       onClick={() => void remove()}
       disabled={busy}
       className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-rose-50 hover:text-destructive disabled:opacity-40"
-      aria-label={`مسح ${title}`}
-      title="مسح (لو اتسجل غلط)"
+      aria-label={entry.kind === 'visit' ? `مسح ${title}` : `إلغاء الدفعة`}
+      title={entry.kind === 'visit' ? 'مسح (لو اتسجل غلط)' : 'إلغاء الدفعة'}
     >
       <Trash2 className="size-4" />
     </button>
@@ -239,21 +244,29 @@ function buildEvents(
   }
   for (const x of payments) {
     if (x.kind !== 'دفعة') continue
+    const cancelled = Boolean(x.cancelled)
     moneyEvents.push({
-      delta: -x.amount,
+      delta: cancelled ? 0 : -x.amount,
       event: {
         id: `payment-${x.id}`,
         at: x.createdAt ?? 0,
         order: 2,
         icon: <Wallet className="size-4" />,
-        tone: 'bg-emerald-500/15 text-emerald-700',
-        title: 'دفع فلوس',
-        detail: [x.note || 'من الباقي', x.method && x.method !== 'نقدي' ? x.method : ''].filter(Boolean).join(' · '),
+        tone: cancelled ? 'bg-rose-500/10 text-rose-700' : 'bg-emerald-500/15 text-emerald-700',
+        title: cancelled ? 'دفعة ملغاة' : 'دفع فلوس',
+        detail: [
+          x.note || 'من الباقي',
+          x.method && x.method !== 'نقدي' ? x.method : '',
+          cancelled && x.cancelledAt ? `اتلغت ${timeLabel(x.cancelledAt)}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
         amount: `+${money(x.amount)}`,
-        amountTone: 'text-success',
+        amountTone: cancelled ? 'text-muted-foreground line-through' : 'text-success',
         by: x.by,
         fallbackDate: x.date,
-        remove: { kind: 'payment', id: x.id },
+        highlight: cancelled,
+        ...(cancelled ? {} : { remove: { kind: 'payment' as const, id: x.id } }),
       },
     })
   }
@@ -282,15 +295,23 @@ function buildEvents(
   }
 
   for (const a of appointments) {
+    const bookingBits = [
+      `يوم ${dayLabel(a.date)}`,
+      a.bookingSource === 'phone' ? 'حجز عن طريق التليفون' : null,
+      a.checkupFeeStatus === 'unpaid' ? 'بدون دفع كشف' : null,
+      a.note,
+    ].filter(Boolean)
     events.push({
       id: `appt-${a.id}`,
       at: a.createdAt,
       order: 3,
       icon: <CalendarPlus className="size-4" />,
-      tone: 'bg-violet-500/15 text-violet-700',
+      tone:
+        a.checkupFeeStatus === 'unpaid' ? 'bg-amber-500/15 text-amber-800' : 'bg-violet-500/15 text-violet-700',
       title: 'حجز ميعاد',
-      detail: [`يوم ${dayLabel(a.date)}`, a.note].filter(Boolean).join(' · '),
+      detail: bookingBits.join(' · '),
       by: a.by,
+      highlight: a.checkupFeeStatus === 'unpaid',
     })
     if (a.status !== 'upcoming') {
       const arrived = a.status === 'arrived'

@@ -139,7 +139,7 @@ function DoctorHome() {
   const { visitors } = useTodayVisitors()
   const todayKey = useTodayKey()
   const { data: payments = [], isLoading: financeLoading } = usePayments(parseDayKey(todayKey).getTime())
-  const income = payments.reduce((s, p) => s + p.amount, 0)
+  const income = payments.filter((p) => !p.cancelled).reduce((s, p) => s + p.amount, 0)
   const todayAppointments = useTodayAppointments()
   const { data: allAppointments = [] } = useUpcomingAppointments()
   const nextAppointment = allAppointments.find((a) => a.status === 'upcoming' && a.date > todayKey)

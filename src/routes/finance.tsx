@@ -267,6 +267,7 @@ function Finance() {
                 <PaymentList
                   payments={shownPayments}
                   dayHeaders={period !== 'day' && period !== 'custom'}
+                  allowCancel
                   className="mt-3 min-h-0 flex-1 overflow-auto pe-1 max-lg:max-h-[28rem]"
                 />
               )}
@@ -330,10 +331,12 @@ function AddExpense() {
   const create = useCreateExpense()
   const [open, setOpen] = useState(false)
   const categories = useClinicSettings().settings.expenseCategories
-  const [picked, setCategory] = useState('')
+  const [picked, setPicked] = useState('')
+  const [customCategory, setCustomCategory] = useState('')
   const category = categories.includes(picked) ? picked : (categories[0] ?? 'أخرى')
   const today = useTodayKey()
   const [date, setDate] = useState(today)
+  const needsCustom = category === 'أخرى'
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -341,9 +344,14 @@ function AddExpense() {
     const data = new FormData(formEl)
     const dateStr = date || today
     const spentAt = dateStr === today ? new Date() : new Date(parseDayKey(dateStr).setHours(12))
+    const resolvedCategory = needsCustom ? customCategory.trim() : category
+    if (!resolvedCategory) {
+      toast.error('اكتب اسم نوع المصروف')
+      return
+    }
     try {
       await create.mutateAsync({
-        category,
+        category: resolvedCategory,
         amount: Number(data.get('amount') || 0),
         note: String(data.get('note') ?? ''),
         spentAt,
@@ -351,6 +359,8 @@ function AddExpense() {
       toast.success('اتسجل المصروف واتخصم من الصافي ✅')
       formEl.reset()
       setDate(today)
+      setCustomCategory('')
+      setPicked('')
       setOpen(false)
     } catch (err) {
       toast.error(errorText(err, 'حصل خطأ أثناء الحفظ'))
@@ -376,7 +386,7 @@ function AddExpense() {
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setCategory(c)}
+                  onClick={() => setPicked(c)}
                   className={cn(
                     'min-h-10 rounded-xl border px-2 text-xs font-semibold transition',
                     category === c
@@ -389,6 +399,17 @@ function AddExpense() {
               ))}
             </div>
           </Field>
+          {needsCustom ? (
+            <Field dense label="اسم النوع" hint="هيتقترح لوحده في المرات الجاية">
+              <input
+                className={inputClass}
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="مثلاً: مياه أو نت أو صيانة تكييف"
+                required
+              />
+            </Field>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
             <Field dense label="المبلغ">
               <input className={inputClass} name="amount" type="number" min="1" step="1" required placeholder="0" />

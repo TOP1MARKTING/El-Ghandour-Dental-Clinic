@@ -1,11 +1,18 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { ar } from 'date-fns/locale'
-import { CalendarCheck, CalendarDays, Check, Clock, FileText, Phone, X } from 'lucide-react'
+import { Banknote, CalendarCheck, CalendarDays, Check, Clock, FileText, Phone, PhoneCall, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { errorText } from '@/lib/api-errors'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Field } from '@/components/clinic/ui'
 import { inputClass } from '@/components/clinic/form-layout'
 import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
@@ -13,18 +20,21 @@ import { Button } from '@/components/ui/button'
 import { parseReason, splitReasons } from '@/components/clinic/reason-select'
 import {
   useCheckInFollowup,
+  useClinicSettings,
   useCreateAppointment,
+  useMarkAppointmentCheckupPaid,
   usePatient,
+  useTodayKey,
   useUndoAppointmentArrival,
   useUpdateAppointmentStatus,
 } from '@/lib/clinic-hooks'
 import { ALREADY_HERE_ERROR } from '@/lib/clinic-api'
-import { addDays, dayKey, formatArabicWeekday, parseDayKey } from '@/lib/format'
+import { addDays, dayKey, formatArabicWeekday, money, paidAtFromDayKey, parseDayKey } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
-import { getStoredNurse, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
-import type { ClinicAppointment } from '@/types'
+import { getStoredNurse, NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
+import type { BookingSource, CheckupFeeStatus, ClinicAppointment } from '@/types'
 
 function nurseForQuickCheckIn(nurses: string[]) {
   return requireNurseName(getStoredNurse(), nurses)
@@ -168,6 +178,62 @@ export function ArabicDatePicker({
   )
 }
 
+function ChoiceRow<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: T
+  onChange: (v: T) => void
+  options: { value: T; label: string }[]
+}) {
+  return (
+    <Field dense label={label}>
+      <div className="grid grid-cols-2 gap-1.5">
+        {options.map((opt) => {
+          const active = value === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                'min-h-10 rounded-xl border px-2 text-xs font-semibold transition',
+                active
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border/80 bg-card hover:border-primary/35',
+              )}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </Field>
+  )
+}
+
+export function AppointmentBadges({ appointment: a }: { appointment: ClinicAppointment }) {
+  return (
+    <>
+      {a.bookingSource === 'phone' ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+          <PhoneCall className="size-3" />
+          حجز عن طريق التليفون
+        </span>
+      ) : null}
+      {a.checkupFeeStatus === 'unpaid' ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+          <Banknote className="size-3" />
+          بدون دفع كشف
+        </span>
+      ) : null}
+    </>
+  )
+}
+
 /** فورم حجز موعد متابعة — لو المريض معروف بيتبعت patientId */
 export function AppointmentForm({
   patientId: fixedPatientId,
@@ -183,6 +249,8 @@ export function AppointmentForm({
   const [date, setDate] = useState('')
   const [note, setNote] = useState('')
   const [doctor, setDoctor] = useState<DoctorId | ''>('')
+  const [bookingSource, setBookingSource] = useState<BookingSource>('clinic')
+  const [checkupFeeStatus, setCheckupFeeStatus] = useState<CheckupFeeStatus>('paid')
   const patientDoctor = usePatient(patientId).data?.doctor
 
   useEffect(() => {
@@ -199,12 +267,22 @@ export function AppointmentForm({
       return
     }
     try {
-      await create.mutateAsync({ patientId, date, time: '', note, ...(doctor ? { doctor } : {}) })
+      await create.mutateAsync({
+        patientId,
+        date,
+        time: '',
+        note,
+        bookingSource,
+        checkupFeeStatus,
+        ...(doctor ? { doctor } : {}),
+      })
       toast.success(
         `اتحجز الموعد — ${formatAppointmentDay(date)}${doctor ? ` مع ${doctorById(doctor).short}` : ''}`,
       )
       setDate('')
       setNote('')
+      setBookingSource('clinic')
+      setCheckupFeeStatus('paid')
       if (!fixedPatientId) setPatientId('')
       onDone?.()
     } catch (err) {
@@ -224,6 +302,24 @@ export function AppointmentForm({
           <DoctorPicker value={doctor} onChange={setDoctor} />
         </Field>
       ) : null}
+      <ChoiceRow
+        label="طريقة الحجز"
+        value={bookingSource}
+        onChange={setBookingSource}
+        options={[
+          { value: 'clinic', label: 'من العيادة' },
+          { value: 'phone', label: 'عن طريق التليفون' },
+        ]}
+      />
+      <ChoiceRow
+        label="دفع الكشف"
+        value={checkupFeeStatus}
+        onChange={setCheckupFeeStatus}
+        options={[
+          { value: 'paid', label: 'دفع كشف' },
+          { value: 'unpaid', label: 'بدون دفع كشف' },
+        ]}
+      />
       <div className="grid gap-1 text-sm font-semibold">
         يرجع إمتى
         <AppointmentDateField date={date} setDate={setDate} />
@@ -244,6 +340,91 @@ export function AppointmentForm({
         {create.isPending ? 'جاري الحجز...' : 'حجز الموعد'}
       </Button>
     </div>
+  )
+}
+
+function MarkCheckupPaidButton({ appointment: a }: { appointment: ClinicAppointment }) {
+  const mark = useMarkAppointmentCheckupPaid()
+  const fee = useClinicSettings().settings.newPatientFee
+  const nursePick = useSelectedNurse()
+  const today = useTodayKey()
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState(String(fee))
+  const [paidDay, setPaidDay] = useState(today)
+
+  useEffect(() => {
+    if (open) {
+      setAmount(String(fee))
+      setPaidDay(today)
+    }
+  }, [open, fee, today])
+
+  if (a.checkupFeeStatus !== 'unpaid') return null
+
+  const save = async () => {
+    const nurse = requireNurseName(nursePick.nurse, nursePick.nurses)
+    if (!nurse.ok) {
+      toast.error(nurse.error)
+      return
+    }
+    const value = Number(amount || 0)
+    if (value <= 0) {
+      toast.error('أدخل مبلغ الكشف')
+      return
+    }
+    try {
+      await mark.mutateAsync({
+        appointmentId: a.id,
+        amount: value,
+        byName: nurse.name,
+        paidAtMs: paidAtFromDayKey(paidDay, today),
+      })
+      toast.success(`اتسجل دفع كشف ${money(value)} في الدخل ✅`)
+      setOpen(false)
+    } catch (err) {
+      toast.error(errorText(err, 'حصل خطأ أثناء تسجيل دفع الكشف'))
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="h-10 rounded-xl border-amber-500/40 px-3 text-amber-800 @lg:h-9">
+          <Banknote className="size-4" />
+          دفع كشف
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm rounded-2xl" dir="rtl">
+        <DialogHeader className="text-start">
+          <DialogTitle>تسجيل دفع الكشف — {a.patientName}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <NursePicker value={nursePick.nurse} onChange={nursePick.setNurse} nurses={nursePick.nurses} />
+          <Field dense label="مبلغ الكشف">
+            <input
+              className={inputClass}
+              type="number"
+              min="1"
+              step="1"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
+          <div className="grid gap-1 text-sm font-semibold">
+            تاريخ الدفع
+            <ArabicDatePicker past value={paidDay} onChange={setPaidDay} />
+          </div>
+          <Button
+            type="button"
+            className="h-11 rounded-xl"
+            disabled={mark.isPending || !nursePick.ready}
+            onClick={() => void save()}
+          >
+            {mark.isPending ? 'جاري التسجيل...' : 'تسجيل في الدخل'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -375,6 +556,7 @@ export function AppointmentCheckRow({ appointment: a }: { appointment: ClinicApp
           >
             {arrived ? 'حضر' : 'لسه ماجاش'}
           </span>
+          <AppointmentBadges appointment={a} />
         </div>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
           {a.phone ? (
@@ -391,7 +573,8 @@ export function AppointmentCheckRow({ appointment: a }: { appointment: ClinicApp
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        <MarkCheckupPaidButton appointment={a} />
         <Button asChild variant="outline" className="h-10 rounded-xl px-3">
           <Link to="/patients/$patientId" params={{ patientId: a.patientId }}>
             الملف
@@ -489,6 +672,7 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
               اتلغى
             </span>
           ) : null}
+          <AppointmentBadges appointment={a} />
         </div>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
           {showDate ? <span className="font-semibold text-foreground/80">{formatAppointmentDay(a.date)}</span> : null}
@@ -506,7 +690,8 @@ export function AppointmentRow({ appointment: a, showDate = false }: { appointme
         </p>
       </div>
 
-      <div className={cn('flex gap-2 @lg:w-auto', isToday && !done ? 'w-full' : 'ms-auto')}>
+      <div className={cn('flex flex-wrap gap-2 @lg:w-auto', isToday && !done ? 'w-full' : 'ms-auto')}>
+        <MarkCheckupPaidButton appointment={a} />
         {isToday && !done ? (
           <Button className="h-10 min-w-0 flex-1 rounded-xl @lg:h-9 @lg:flex-none" disabled={busy} onClick={arrived}>
             <CalendarCheck className="size-4" />

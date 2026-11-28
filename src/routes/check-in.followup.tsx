@@ -9,11 +9,12 @@ import { PatientSearchPicker } from '@/components/clinic/patient-search-picker'
 import { ChargeFields, useChargeForm } from '@/components/clinic/charge-fields'
 import { PatientTimeline } from '@/components/clinic/patient-timeline'
 import { Button } from '@/components/ui/button'
-import { useCheckInFollowup, usePatients } from '@/lib/clinic-hooks'
-import { money } from '@/lib/format'
+import { useCheckInFollowup, usePatients, useTodayKey } from '@/lib/clinic-hooks'
+import { money, paidAtFromDayKey } from '@/lib/format'
 import { patientBalance } from '@/lib/pricing'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorPicker } from '@/components/clinic/doctors'
+import { ArabicDatePicker } from '@/components/clinic/appointments'
 import { NursePicker, requireNurseName, useSelectedNurse } from '@/components/clinic/nurse-picker'
 import { cn } from '@/lib/utils'
 import type { Patient } from '@/types'
@@ -49,6 +50,8 @@ function CheckInFollowup() {
   const { data: patients = [] } = usePatients()
   const [patientId, setPatientId] = useState(initialPatient ?? '')
   const [oldPaid, setOldPaid] = useState('')
+  const today = useTodayKey()
+  const [oldPaidDay, setOldPaidDay] = useState(today)
   const [showNew, setShowNew] = useState(Boolean(checkup))
   const [saving, setSaving] = useState(false)
   const [doctor, setDoctor] = useState<DoctorId | ''>('')
@@ -74,9 +77,10 @@ function CheckInFollowup() {
 
   useEffect(() => {
     setOldPaid('')
+    setOldPaidDay(today)
     if (!checkup) toggleNew(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId])
+  }, [patientId, today])
 
   useEffect(() => {
     if (!checkup || !patientId) return
@@ -130,7 +134,9 @@ function CheckInFollowup() {
         ...(charge.base > 0
           ? { charge: { basePrice: charge.base, discountPercent: form.discount, paidToday: paidN } }
           : {}),
-        ...(oldPaidN > 0 ? { oldPayment: oldPaidN } : {}),
+        ...(oldPaidN > 0
+          ? { oldPayment: oldPaidN, oldPaymentAtMs: paidAtFromDayKey(oldPaidDay, today) }
+          : {}),
       })
       const withDoctor = doctor ? ` مع ${doctorById(doctor).short}` : ''
       toast.success(
@@ -181,7 +187,13 @@ function CheckInFollowup() {
             >
               <DoctorPicker value={doctor} onChange={setDoctor} />
             </Field>
-            <OldBalance oldPaid={oldPaid} setOldPaid={setOldPaid} remaining={oldRemaining} />
+            <OldBalance
+              oldPaid={oldPaid}
+              setOldPaid={setOldPaid}
+              remaining={oldRemaining}
+              paidDay={oldPaidDay}
+              setPaidDay={setOldPaidDay}
+            />
 
             <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
               <div className="min-w-0 flex-1">
@@ -269,10 +281,14 @@ function OldBalance({
   remaining,
   oldPaid,
   setOldPaid,
+  paidDay,
+  setPaidDay,
 }: {
   remaining: number
   oldPaid: string
   setOldPaid: (v: string) => void
+  paidDay: string
+  setPaidDay: (v: string) => void
 }) {
   if (remaining <= 0) {
     return (
@@ -308,7 +324,11 @@ function OldBalance({
           الكل
         </button>
       </div>
-      <p className="text-[11px] font-normal text-muted-foreground">بيتسجل مع تسجيل الحضور</p>
+      <div className="grid gap-1 text-xs font-semibold">
+        تاريخ الدفع
+        <ArabicDatePicker past value={paidDay} onChange={setPaidDay} className="h-9 bg-card text-sm" />
+      </div>
+      <p className="text-[11px] font-normal text-muted-foreground">بيتحسب في دخل يوم الدفع، مش تاريخ الحساب القديم</p>
     </div>
   )
 }

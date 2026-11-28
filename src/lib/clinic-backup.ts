@@ -90,13 +90,15 @@ export async function buildClinicWorkbook(input: {
   sheet(
     wb,
     'المواعيد',
-    ['المريض', 'الموبايل', 'التاريخ', 'الوقت', 'الحالة', 'الدكتور', 'ملاحظة', 'بواسطة'],
+    ['المريض', 'الموبايل', 'التاريخ', 'الوقت', 'الحالة', 'طريقة الحجز', 'دفع الكشف', 'الدكتور', 'ملاحظة', 'بواسطة'],
     input.appointments.map((a) => [
       a.patientName,
       a.phone,
       a.date,
       a.time || '',
       a.status,
+      a.bookingSource === 'phone' ? 'تليفون' : 'عيادة',
+      a.checkupFeeStatus === 'unpaid' ? 'بدون دفع كشف' : 'دفع كشف',
       a.doctor,
       a.note,
       a.by ?? '',

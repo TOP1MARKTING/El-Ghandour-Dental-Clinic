@@ -10,9 +10,14 @@ import {
   checkInFollowupPatient,
   checkInNewPatient,
   createAppointment,
+  addMaterialMovement,
+  cancelPayment,
+  createLabEntry,
+  createMaterialInvoice,
   deleteExpense,
+  deleteLabEntry,
+  deleteMaterialInvoice,
   deletePatient,
-  deletePayment,
   deleteService,
   deleteVisit,
   updatePatient,
@@ -20,6 +25,9 @@ import {
   getOutstandingTotal,
   getPaymentsTotal,
   listFinanceSince,
+  listLabEntries,
+  listMaterialInvoices,
+  listMaterialMovements,
   listPatientAppointments,
   listPatients,
   listPayments,
@@ -28,6 +36,7 @@ import {
   listServices,
   listTodayQueue,
   listVisitsForPatient,
+  markAppointmentCheckupPaid,
   subscribeTodayQueue,
   updateAppointmentStatus,
   updateServicePrice,
@@ -129,7 +138,10 @@ export function useCreateExpense() {
   return useMutation({
     mutationFn: createExpense,
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['finance'] })
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['finance'] }),
+        qc.invalidateQueries({ queryKey: ['settings'] }),
+      ])
     },
   })
 }
@@ -295,11 +307,111 @@ export function useDeleteVisit() {
   })
 }
 
-export function useDeletePayment() {
+export function useCancelPayment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: deletePayment,
+    mutationFn: cancelPayment,
     onSuccess: ({ patientId }) => refreshClinicData(qc, patientId),
+  })
+}
+
+/** نفس إلغاء الدفعة — الاسم القديم للتوافق مع الشاشات */
+export function useDeletePayment() {
+  return useCancelPayment()
+}
+
+export function useLabEntries() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['labEntries'],
+    queryFn: listLabEntries,
+    enabled: ready && admin,
+    retry: 1,
+    staleTime: 60_000,
+  })
+  return { ...query, isLoading: !ready || (admin && query.isLoading) }
+}
+
+export function useCreateLabEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: createLabEntry,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['labEntries'] })
+    },
+  })
+}
+
+export function useDeleteLabEntry() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deleteLabEntry,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['labEntries'] })
+    },
+  })
+}
+
+export function useMaterialInvoices() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['materialInvoices'],
+    queryFn: listMaterialInvoices,
+    enabled: ready && admin,
+    retry: 1,
+    staleTime: 60_000,
+  })
+  return { ...query, isLoading: !ready || (admin && query.isLoading) }
+}
+
+export function useMaterialMovements() {
+  const ready = useClinicReady()
+  const admin = useIsAdmin()
+  const query = useQuery({
+    queryKey: ['materialMovements'],
+    queryFn: listMaterialMovements,
+    enabled: ready && admin,
+    retry: 1,
+    staleTime: 60_000,
+  })
+  return { ...query, isLoading: !ready || (admin && query.isLoading) }
+}
+
+export function useCreateMaterialInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: createMaterialInvoice,
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['materialInvoices'] }),
+        qc.invalidateQueries({ queryKey: ['materialMovements'] }),
+      ])
+    },
+  })
+}
+
+export function useAddMaterialMovement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: addMaterialMovement,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['materialMovements'] })
+    },
+  })
+}
+
+export function useDeleteMaterialInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deleteMaterialInvoice,
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['materialInvoices'] }),
+        qc.invalidateQueries({ queryKey: ['materialMovements'] }),
+      ])
+    },
   })
 }
 
@@ -458,6 +570,19 @@ export function useCreateAppointment() {
     mutationFn: createAppointment,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['appointments'] })
+    },
+  })
+}
+
+export function useMarkAppointmentCheckupPaid() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: markAppointmentCheckupPaid,
+    onSuccess: async (result) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['appointments'] }),
+        refreshClinicData(qc, result.patientId),
+      ])
     },
   })
 }

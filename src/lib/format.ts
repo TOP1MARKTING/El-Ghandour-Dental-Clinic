@@ -96,6 +96,14 @@ export function parseDayKey(key: string) {
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1)
 }
 
+/** تاريخ الدفع للدخل: النهاردة = الوقت الحالي، يوم سابق = ظهر اليوم ده */
+export function paidAtFromDayKey(key: string, today = dayKey()) {
+  if (!key || key === today) return Date.now()
+  const d = parseDayKey(key)
+  d.setHours(12, 0, 0, 0)
+  return d.getTime()
+}
+
 export function addDays(date: Date, days: number) {
   const d = new Date(date)
   d.setDate(d.getDate() + days)
