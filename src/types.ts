@@ -187,4 +187,7 @@ export type QueueEntry = {
   /** اتحاسب عند الحجز */
   billed?: boolean
   billedTotal?: number
+  bookingSource?: BookingSource
+  /** كشف من غير ما يتدفع */
+  checkupUnpaid?: boolean
 }

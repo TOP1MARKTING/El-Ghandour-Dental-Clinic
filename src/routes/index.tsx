@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, CalendarDays, CalendarPlus, Users, Wallet } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CalendarPlus, Phone, Users, Wallet } from 'lucide-react'
 import { PageSurface } from '@/components/clinic/app-shell'
 import { EmptyState, LoadingSkeleton } from '@/components/clinic/ui'
 import { Button } from '@/components/ui/button'
@@ -283,7 +283,7 @@ function AddAppointmentButton() {
           إضافة ميعاد
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg rounded-2xl" dir="rtl">
+      <DialogContent className="max-h-[min(92dvh,40rem)] max-w-lg overflow-y-auto rounded-2xl" dir="rtl">
         <DialogHeader className="text-start">
           <DialogTitle>حجز موعد متابعة</DialogTitle>
         </DialogHeader>
@@ -416,39 +416,65 @@ function ActionCard({
 }
 
 function VisitorRow({ item }: { item: QueueEntry }) {
+  const reason =
+    item.reason && !['كشف جديد', 'متابعة', 'كشف'].includes(item.reason) ? item.reason : ''
+
   return (
-    <article className="glass flex items-center gap-3 rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3">
+    <article className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-card px-3 py-2.5 shadow-sm">
       <span
         className={cn(
-          'grid size-11 shrink-0 place-items-center rounded-full font-bold',
-          item.kind === 'new' ? 'surface-ink text-white' : 'bg-teal-100 text-teal-700',
+          'grid size-11 shrink-0 place-items-center rounded-xl font-display text-sm font-bold',
+          item.kind === 'new' ? 'surface-ink text-white' : 'bg-teal-500/15 text-teal-700',
         )}
+        title={`رقم ${item.order}`}
       >
-        {item.patientName.trim().charAt(0) || '؟'}
+        {item.order || item.patientName.trim().charAt(0) || '؟'}
       </span>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="truncate font-semibold">{item.patientName}</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Link
+            to="/patients/$patientId"
+            params={{ patientId: item.patientId }}
+            className="truncate font-semibold hover:text-primary"
+          >
+            {item.patientName}
+          </Link>
           <span
             className={cn(
               'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-              item.kind === 'new' ? 'bg-blue-50 text-blue-700' : 'bg-teal-50 text-teal-700',
+              item.kind === 'new' ? 'bg-blue-500/10 text-blue-700' : 'bg-teal-500/10 text-teal-700',
             )}
           >
             {item.kind === 'new' ? 'جديد' : 'متابعة'}
           </span>
           <DoctorBadge id={item.doctor} />
+          {item.bookingSource === 'phone' ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+              <Phone className="size-3" />
+              تليفون
+            </span>
+          ) : null}
+          {item.checkupUnpaid ? (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              بدون دفع كشف
+            </span>
+          ) : null}
         </div>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">
-          جه الساعة {item.arrivedAt}
-          {item.reason && !['كشف جديد', 'متابعة', 'كشف'].includes(item.reason) ? ` · ${item.reason}` : ''}
-          {item.phone ? ` · ${item.phone}` : ''}
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+          <span>جه الساعة {item.arrivedAt}</span>
+          {reason ? <span className="truncate font-semibold text-violet-700">{reason}</span> : null}
+          {item.phone ? (
+            <a href={`tel:${item.phone}`} dir="ltr" className="inline-flex items-center gap-1 hover:text-primary">
+              <Phone className="size-3" />
+              {item.phone}
+            </a>
+          ) : null}
         </p>
       </div>
 
       {item.patientId ? (
-        <Button asChild variant="outline" className="h-10 shrink-0 rounded-xl px-4">
+        <Button asChild variant="outline" className="h-10 shrink-0 rounded-xl px-3">
           <Link to="/patients/$patientId" params={{ patientId: item.patientId }}>
             الملف
           </Link>

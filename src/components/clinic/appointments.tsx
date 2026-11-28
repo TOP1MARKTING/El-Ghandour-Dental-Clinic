@@ -187,11 +187,11 @@ function ChoiceRow<T extends string>({
   label: string
   value: T
   onChange: (v: T) => void
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; activeClass: string }[]
 }) {
   return (
     <Field dense label={label}>
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-1">
         {options.map((opt) => {
           const active = value === opt.value
           return (
@@ -200,10 +200,8 @@ function ChoiceRow<T extends string>({
               type="button"
               onClick={() => onChange(opt.value)}
               className={cn(
-                'min-h-10 rounded-xl border px-2 text-xs font-semibold transition',
-                active
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border/80 bg-card hover:border-primary/35',
+                'min-h-9 rounded-xl border px-1.5 text-[11px] font-semibold leading-tight transition sm:text-xs',
+                active ? opt.activeClass : 'border-border/70 bg-card text-muted-foreground hover:border-foreground/20',
               )}
             >
               {opt.label}
@@ -291,7 +289,7 @@ export function AppointmentForm({
   }
 
   return (
-    <div className={cn('grid gap-3', className)}>
+    <div className={cn('grid gap-2.5', className)}>
       {fixedPatientId ? null : (
         <Field dense label="المريض">
           <PatientSearchPicker value={patientId} onChange={setPatientId} />
@@ -302,24 +300,42 @@ export function AppointmentForm({
           <DoctorPicker value={doctor} onChange={setDoctor} />
         </Field>
       ) : null}
-      <ChoiceRow
-        label="طريقة الحجز"
-        value={bookingSource}
-        onChange={setBookingSource}
-        options={[
-          { value: 'clinic', label: 'من العيادة' },
-          { value: 'phone', label: 'عن طريق التليفون' },
-        ]}
-      />
-      <ChoiceRow
-        label="دفع الكشف"
-        value={checkupFeeStatus}
-        onChange={setCheckupFeeStatus}
-        options={[
-          { value: 'paid', label: 'دفع كشف' },
-          { value: 'unpaid', label: 'بدون دفع كشف' },
-        ]}
-      />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2.5">
+        <ChoiceRow
+          label="طريقة الحجز"
+          value={bookingSource}
+          onChange={setBookingSource}
+          options={[
+            {
+              value: 'clinic',
+              label: 'من العيادة',
+              activeClass: 'border-primary bg-primary text-primary-foreground shadow-sm',
+            },
+            {
+              value: 'phone',
+              label: 'تليفون',
+              activeClass: 'border-sky-500 bg-sky-500 text-white shadow-sm',
+            },
+          ]}
+        />
+        <ChoiceRow
+          label="دفع الكشف"
+          value={checkupFeeStatus}
+          onChange={setCheckupFeeStatus}
+          options={[
+            {
+              value: 'paid',
+              label: 'دفع كشف',
+              activeClass: 'border-emerald-600 bg-emerald-600 text-white shadow-sm',
+            },
+            {
+              value: 'unpaid',
+              label: 'بدون دفع',
+              activeClass: 'border-amber-500 bg-amber-500 text-white shadow-sm',
+            },
+          ]}
+        />
+      </div>
       <div className="grid gap-1 text-sm font-semibold">
         يرجع إمتى
         <AppointmentDateField date={date} setDate={setDate} />
@@ -441,7 +457,7 @@ function NoteSuggestions({
   const current = splitReasons(patient?.problem ?? '')
     .map((r) => parseReason(r).name)
     .filter((r) => !r.includes('كشف'))
-  const options = [...current.map((r) => `تكملة ${r}`), 'متابعة', 'مراجعة']
+  const options = [...current.map((r) => `تكملة ${r}`), 'كشف', 'متابعة', 'مراجعة']
 
   return (
     <div className="contents">

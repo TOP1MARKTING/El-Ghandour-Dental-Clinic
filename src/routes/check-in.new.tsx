@@ -14,7 +14,7 @@ import { patientBalance } from '@/lib/pricing'
 import { doctorById, type DoctorId } from '@/lib/doctors'
 import { DoctorBadge, DoctorPicker } from '@/components/clinic/doctors'
 import { cn } from '@/lib/utils'
-import type { Patient } from '@/types'
+import type { BookingSource, Patient } from '@/types'
 
 export const Route = createFileRoute('/check-in/new')({
   head: () => ({
@@ -46,6 +46,7 @@ function CheckInNew() {
   const form = useChargeForm()
   const [feeMode, setFeeMode] = useState<FeeMode | ''>('')
   const [feePaid, setFeePaid] = useState(true)
+  const [bookingSource, setBookingSource] = useState<BookingSource>('clinic')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const nursePick = useSelectedNurse()
@@ -117,6 +118,7 @@ function CheckInNew() {
         address: String((e.currentTarget.elements.namedItem('address') as HTMLInputElement | null)?.value ?? ''),
         feePrice,
         feePaid: withCheckup ? feePaid : true,
+        bookingSource,
         doctor,
         byName: nurse.name,
         ...(reason ? { reason } : {}),
@@ -221,69 +223,117 @@ function CheckInNew() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-2 rounded-xl border border-border/70 bg-muted/25 p-3 sm:col-span-2">
-            <p className="text-sm font-semibold">نوع الحضور</p>
-            <div role="radiogroup" aria-label="كشف أو بدون كشف" className="grid grid-cols-2 gap-2">
-              {(
-                [
-                  { id: 'كشف' as const, title: 'كشف', hint: fee > 0 ? `يدفع ${money(fee)}` : 'الكشف ببلاش' },
-                  { id: 'بدون كشف' as const, title: 'بدون كشف', hint: 'متابعة قديمة — من غير كشف' },
-                ] as const
-              ).map((opt) => {
-                const active = feeMode === opt.id
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setFeeMode(opt.id)}
-                    className={cn(
-                      'rounded-xl border px-3 py-2.5 text-start transition',
-                      active
-                        ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20'
-                        : 'border-border bg-card text-foreground/80 hover:border-foreground/25',
-                    )}
-                  >
-                    <span className="block text-sm font-bold">{opt.title}</span>
-                    <span className="mt-0.5 block text-[11px] font-medium opacity-80">{opt.hint}</span>
-                  </button>
-                )
-              })}
+          <div className="grid gap-2.5 rounded-xl border border-border/70 bg-muted/25 p-3 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field dense label="طريقة الحجز">
+                <div className="grid grid-cols-2 gap-1">
+                  {(
+                    [
+                      {
+                        id: 'clinic' as const,
+                        label: 'من العيادة',
+                        active: 'border-primary bg-primary text-primary-foreground shadow-sm',
+                      },
+                      {
+                        id: 'phone' as const,
+                        label: 'تليفون',
+                        active: 'border-sky-500 bg-sky-500 text-white shadow-sm',
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const active = bookingSource === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setBookingSource(opt.id)}
+                        className={cn(
+                          'min-h-9 rounded-xl border px-2 text-xs font-semibold transition',
+                          active ? opt.active : 'border-border/70 bg-card text-muted-foreground hover:border-foreground/20',
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </Field>
+
+              <Field dense label="نوع الحضور">
+                <div role="radiogroup" aria-label="كشف أو بدون كشف" className="grid grid-cols-2 gap-1">
+                  {(
+                    [
+                      { id: 'كشف' as const, title: 'كشف', active: 'border-emerald-600 bg-emerald-600 text-white shadow-sm' },
+                      { id: 'بدون كشف' as const, title: 'بدون كشف', active: 'border-slate-500 bg-slate-500 text-white shadow-sm' },
+                    ] as const
+                  ).map((opt) => {
+                    const active = feeMode === opt.id
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setFeeMode(opt.id)}
+                        className={cn(
+                          'min-h-9 rounded-xl border px-2 text-xs font-semibold transition',
+                          active ? opt.active : 'border-border/70 bg-card text-muted-foreground hover:border-foreground/20',
+                        )}
+                      >
+                        {opt.title}
+                      </button>
+                    )
+                  })}
+                </div>
+              </Field>
             </div>
 
             {withCheckup ? (
-              <div className="flex items-center gap-2.5 rounded-xl border border-success/25 bg-success/5 px-3 py-2.5">
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
-                  <Check className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">
+              <div className="grid gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-700">
+                    <Check className="size-4" />
+                  </span>
+                  <p className="min-w-0 flex-1 text-sm font-semibold">
                     {settingsLoading ? 'جاري تحميل سعر الكشف...' : fee > 0 ? `الكشف ${money(fee)}` : 'الكشف ببلاش'}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {fee <= 0 ? 'سعر الكشف صفر في صفحة الأسعار' : feePaid ? 'دفع الكشف' : 'الكشف هيتسجل عليه'}
                   </p>
                 </div>
                 {fee > 0 ? (
-                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-xs font-semibold">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-primary"
-                      checked={!feePaid}
-                      onChange={(e) => setFeePaid(!e.target.checked)}
-                    />
-                    مدفعش الكشف
-                  </label>
-                ) : null}
+                  <Field dense label="دفع الكشف">
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setFeePaid(true)}
+                        className={cn(
+                          'min-h-9 rounded-xl border px-2 text-xs font-semibold transition',
+                          feePaid
+                            ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
+                            : 'border-border/70 bg-card text-muted-foreground hover:border-foreground/20',
+                        )}
+                      >
+                        دفع
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFeePaid(false)}
+                        className={cn(
+                          'min-h-9 rounded-xl border px-2 text-xs font-semibold transition',
+                          !feePaid
+                            ? 'border-amber-500 bg-amber-500 text-white shadow-sm'
+                            : 'border-border/70 bg-card text-muted-foreground hover:border-foreground/20',
+                        )}
+                      >
+                        لسه
+                      </button>
+                    </div>
+                  </Field>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">سعر الكشف صفر في صفحة الأسعار</p>
+                )}
               </div>
-            ) : feeMode === 'بدون كشف' ? (
-              <p className="rounded-xl border border-border/70 bg-card px-3 py-2.5 text-xs text-muted-foreground">
-                هيتسجل من غير بند كشف — مناسب لمتابعة قديمة كانت بتيجي قبل كده.
-              </p>
-            ) : (
+            ) : !feeMode ? (
               <p className="text-xs font-semibold text-warning">لازم تختار كشف أو بدون كشف قبل التسجيل</p>
-            )}
+            ) : null}
           </div>
         )}
       </div>

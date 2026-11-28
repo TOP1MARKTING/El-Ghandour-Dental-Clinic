@@ -82,7 +82,7 @@ function Appointments() {
                 موعد جديد
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg rounded-2xl" dir="rtl">
+            <DialogContent className="max-h-[min(92dvh,40rem)] max-w-lg overflow-y-auto rounded-2xl" dir="rtl">
               <DialogHeader className="text-start">
                 <DialogTitle>حجز موعد متابعة</DialogTitle>
               </DialogHeader>

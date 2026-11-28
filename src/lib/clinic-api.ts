@@ -201,6 +201,8 @@ function mapQueue(id: string, data: DocumentData): QueueEntry {
     createdAt: Number(data['createdAtMs'] ?? 0),
     billed: Boolean(data['billed']),
     billedTotal: Number(data['billedTotal'] ?? 0),
+    bookingSource: bookingSourceOf(data['bookingSource']),
+    checkupUnpaid: Boolean(data['checkupUnpaid']),
   }
 }
 
@@ -729,6 +731,8 @@ function queueDoc(input: {
   now: number
   billedTotal?: number
   byName: string
+  bookingSource?: BookingSource
+  checkupUnpaid?: boolean
 }) {
   return {
     patientId: input.patientId,
@@ -743,6 +747,8 @@ function queueDoc(input: {
     status: 'في الانتظار',
     createdAtMs: input.now,
     createdAt: serverTimestamp(),
+    bookingSource: input.bookingSource === 'phone' ? 'phone' : 'clinic',
+    checkupUnpaid: Boolean(input.checkupUnpaid),
     ...stamp(input.byName),
     ...(input.billedTotal !== undefined ? { billed: true, billedTotal: input.billedTotal } : {}),
   }
@@ -762,6 +768,7 @@ export async function checkInNewPatient(input: {
   feePrice: number
   /** دفع الكشف ولا اتسجل عليه */
   feePaid?: boolean
+  bookingSource?: BookingSource
   /** لو اتحدد سعر عند الحجز بيتسجل العلاج والدفعة على طول */
   charge?: ChargeInput
   doctor: DoctorId
@@ -836,6 +843,8 @@ export async function checkInNewPatient(input: {
       key,
       now,
       byName,
+      bookingSource: input.bookingSource === 'phone' ? 'phone' : 'clinic',
+      checkupUnpaid: input.feePrice > 0 && input.feePaid === false,
       ...(charge ? { billedTotal: charge.final } : {}),
     }),
   )
