@@ -115,7 +115,7 @@ function HomeHeader() {
 
 function BookingActions() {
   return (
-    <div className="grid shrink-0 gap-2.5 sm:grid-cols-2">
+    <div className="sticky top-0 z-20 -mx-1 grid shrink-0 gap-2.5 bg-scene/95 px-1 py-2 backdrop-blur-md sm:grid-cols-2">
       <ActionCard
         to="/check-in/new"
         primary
@@ -300,12 +300,12 @@ function ReceptionHome() {
   const todayAppointments = useTodayAppointments()
 
   return (
-    <PageSurface className="flex h-auto flex-col lg:h-full lg:overflow-hidden">
+    <PageSurface className="flex flex-col pb-6">
       <HomeHeader />
 
       <BookingActions />
 
-      <section className="mt-3 shrink-0 rounded-2xl border border-primary/15 bg-primary/5 p-2.5 sm:mt-4 sm:p-3">
+      <section className="mt-3 rounded-2xl border border-primary/15 bg-primary/5 p-2.5 sm:mt-4 sm:p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="min-w-0">
             <h2 className="inline-flex items-center gap-1.5 text-sm font-semibold">
@@ -322,10 +322,10 @@ function ReceptionHome() {
             كل المواعيد
           </Link>
         </div>
-        <TodayAppointmentsList appointments={todayAppointments} className="max-h-60 overflow-auto pe-1" />
+        <TodayAppointmentsList appointments={todayAppointments} className="space-y-2" />
       </section>
 
-      <section className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden lg:mt-5">
+      <section className="mt-4 sm:mt-5">
         <div className="mb-3 flex items-end justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold">اللي جم النهاردة</h2>
@@ -352,12 +352,12 @@ function ReceptionHome() {
           />
         ) : visitors.length === 0 ? (
           <EmptyState
-            className="min-h-48 flex-1 sm:min-h-48"
+            className="min-h-48 sm:min-h-48"
             icon={<ToothIcon className="size-7" strokeWidth={1.6} />}
             title="لسه محدش جه النهاردة — أول ما حد يوصل سجّله من فوق"
           />
         ) : (
-          <div className="min-h-0 flex-1 space-y-2 overflow-auto pb-2">
+          <div className="space-y-2 pb-2">
             {visitors.map((item, i) => (
               <div key={item.id} className="animate-rise" style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}>
                 <VisitorRow item={item} />

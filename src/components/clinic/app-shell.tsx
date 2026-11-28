@@ -108,7 +108,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (loading || !user) return <BootScreen />
 
   const formPage = path.endsWith('/new') || path.startsWith('/check-in/')
-  const listPage = ['/', '/patients', '/payments', '/finance', '/appointments', '/services', '/nurses', '/lab', '/materials'].includes(path)
+  // الرئيسية بتسكرول عادي عشان القوايم تطول — باقي القوايم بتقعد في شاشة واحدة
+  const listPage = ['/patients', '/payments', '/finance', '/appointments', '/services', '/nurses', '/lab', '/materials'].includes(path)
   const profilePage = /^\/patients\/[^/]+$/.test(path) && !formPage
   const fitHeight = formPage || listPage || profilePage
   const initial = user.name.replace(/^د\.\s*/, '').trim().charAt(0) || 'د'
